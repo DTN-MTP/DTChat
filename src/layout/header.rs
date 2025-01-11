@@ -32,7 +32,7 @@ impl HeaderLayout {
                 ConnectionStatus::Disconnected => "Disconnected",
             };
 
-            let status_color: egui::Color32 = get_status_color(&self.connection_status);
+            let status_color: egui::Color32 = get_connection_status_color(&self.connection_status);
             ui.label("Status:");
             ui.colored_label(status_color, status_text);
         });
@@ -62,7 +62,7 @@ impl HeaderLayout {
     }
 }
 
-fn get_status_color(status: &ConnectionStatus) -> egui::Color32 {
+fn get_connection_status_color(status: &ConnectionStatus) -> egui::Color32 {
     match status {
         ConnectionStatus::Connected => egui::Color32::GREEN,
         ConnectionStatus::Disconnected => egui::Color32::RED,

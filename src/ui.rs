@@ -20,7 +20,7 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     });
 
     egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
-        let footer = FooterLayout::new(app);
+        let footer = FooterLayout::new();
         footer.show(app, ui);
     });
 }

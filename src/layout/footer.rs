@@ -3,15 +3,11 @@ use crate::message::{Message, MessagePriority, MessageType};
 use chrono::Local;
 use eframe::egui;
 
-pub struct FooterLayout {
-    pub message_to_send: String,
-}
+pub struct FooterLayout {}
 
 impl FooterLayout {
-    pub fn new(app: &ChatApp) -> Self {
-        Self {
-            message_to_send: app.message_to_send.clone(),
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn show(&self, app: &mut ChatApp, ui: &mut egui::Ui) {
@@ -40,11 +36,7 @@ impl FooterLayout {
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut app.message_type, MessageType::Request, "Request");
                     ui.selectable_value(&mut app.message_type, MessageType::Response, "Response");
-                    ui.selectable_value(
-                        &mut app.message_type,
-                        MessageType::Acknowledgement,
-                        "Acknowledgement",
-                    );
+                    ui.selectable_value(&mut app.message_type, MessageType::Code, "Code");
                 });
         });
 
@@ -74,8 +66,8 @@ impl FooterLayout {
         });
 
         if send_message && !app.message_to_send.trim().is_empty() {
-            app.send_time = Local::now().format("%H:%M:%S").to_string(); // Mettre à jour send_time avec l'heure actuelle
-            Message::send(app); // Utiliser la méthode send de la struct Message
+            app.send_time = Local::now().format("%H:%M:%S").to_string();
+            Message::send(app);
         }
         ui.add_space(10.0);
     }
