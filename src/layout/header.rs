@@ -1,10 +1,12 @@
 use crate::app::ChatApp;
+use crate::peer_config::PeerConfig;
 use eframe::egui;
 
 pub struct HeaderLayout {
     pub local_endpoint: String,
     pub peer_endpoint: String,
     pub connection_status: ConnectionStatus,
+    pub peers: Vec<String>,
 }
 
 #[derive(PartialEq, Clone)]
@@ -16,14 +18,21 @@ pub enum ConnectionStatus {
 
 impl HeaderLayout {
     pub fn new(app: &ChatApp) -> Self {
+        let peer_config = PeerConfig::load_from_file("peer-config.yaml");
+        let peers = peer_config
+            .peer_list
+            .iter()
+            .map(|peer| peer.endpoint.clone())
+            .collect();
         Self {
             local_endpoint: app.local_endpoint.clone(),
             peer_endpoint: app.peer_endpoint.clone(),
             connection_status: app.connection_status.clone(),
+            peers,
         }
     }
 
-    pub fn show(&self, ui: &mut egui::Ui) {
+    pub fn show(&mut self, ui: &mut egui::Ui) {
         ui.add_space(10.0);
 
         ui.horizontal(|ui| {
@@ -57,7 +66,22 @@ impl HeaderLayout {
                 );
                 ui.end_row();
             });
+        ui.add_space(10.0);
 
+        ui.separator();
+
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Peer List:");
+            egui::ComboBox::from_id_salt("Peers")
+                .selected_text(format!("{:?}", self.peer_endpoint))
+                .show_ui(ui, |ui| {
+                    for peer in &self.peers {
+                        ui.selectable_value(&mut self.peer_endpoint, peer.clone(), peer);
+                    }
+                });
+        });
         ui.add_space(10.0);
     }
 }

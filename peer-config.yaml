@@ -1,0 +1,5 @@
+peer_list:
+  - name: john
+    endpoint: john.example.0
+  - name: doe
+    endpoint: doe.example.1

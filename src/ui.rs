@@ -10,7 +10,7 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     app.send_time = Local::now().format("%H:%M:%S").to_string();
 
     egui::TopBottomPanel::top("header").show(ctx, |ui| {
-        let header = HeaderLayout::new(app);
+        let mut header = HeaderLayout::new(app);
         header.show(ui);
     });
 

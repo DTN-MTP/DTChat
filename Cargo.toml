@@ -7,3 +7,5 @@ edition = "2021"
 egui = "0.30.0"
 chrono = "0.4"
 eframe = "0.30.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_yaml = "0.9.34"
