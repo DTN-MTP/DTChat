@@ -1,7 +1,13 @@
-use chrono::{Duration, Local};
-use eframe::egui;
 use crate::message::Message;
 use crate::ui;
+use chrono::{Duration, Local};
+use eframe::egui;
+
+#[derive(PartialEq)]
+pub enum ConnectionStatus {
+    Connected,
+    Disconnected,
+}
 
 pub struct ChatApp {
     pub messages: Vec<Message>,
@@ -9,6 +15,9 @@ pub struct ChatApp {
     pub sent_by_user: bool,
     pub send_time: String,
     pub receive_time: String,
+    pub local_endpoint: String,
+    pub peer_endpoint: String,
+    pub connection_status: ConnectionStatus,
 }
 
 impl Default for ChatApp {
@@ -20,6 +29,9 @@ impl Default for ChatApp {
             sent_by_user: true,
             send_time: Local::now().format("%H:%M:%S").to_string(),
             receive_time: recv_time.format("%H:%M:%S").to_string(),
+            peer_endpoint: "ipn:<node_id>.1".to_string(),
+            local_endpoint: "ipn:<node_id>.0".to_string(),
+            connection_status: ConnectionStatus::Connected,
         }
     }
 }
