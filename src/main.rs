@@ -117,8 +117,8 @@ impl eframe::App for ChatApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new(format!(
-                                    "[{}] {}",
-                                    message.time_anchor, message.text
+                                    "[{}/{}] {}",
+                                    message.send_time, message.receive_time, message.text
                                 ))
                                 .color(text_color),
                             );
