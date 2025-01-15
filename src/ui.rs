@@ -3,15 +3,12 @@ use crate::layout::body::BodyLayout;
 use crate::layout::footer::FooterLayout;
 use crate::layout::header::HeaderLayout;
 
-use chrono::Local;
 use eframe::egui;
 
 pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
-    app.send_time = Local::now().format("%H:%M:%S").to_string();
-
     egui::TopBottomPanel::top("header").show(ctx, |ui| {
         let mut header = HeaderLayout::new(app);
-        header.show(ui);
+        header.show(app, ui);
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -20,7 +17,7 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     });
 
     egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
-        let footer = FooterLayout::new();
+        let mut footer = FooterLayout::new();
         footer.show(app, ui);
     });
 }

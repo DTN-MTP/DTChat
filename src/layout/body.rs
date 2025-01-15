@@ -21,11 +21,10 @@ impl BodyLayout {
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new(format!(
-                                "[{}] [{}] [{}] [{}]",
+                                "[{}] [{}] [{}]",
                                 message.send_time,
                                 message.get_shipment_status_str(),
                                 message.get_type_str(),
-                                message.get_priority_str()
                             )));
                         });
 
