@@ -1,6 +1,7 @@
 use crate::app::ChatApp;
-use crate::message::{Message, MessageType, SendByUser};
+use crate::message::{ContextSender, Message};
 use eframe::egui;
+use egui::{vec2, Color32, ComboBox, Rounding, TextEdit};
 
 pub struct FooterLayout {}
 
@@ -12,38 +13,26 @@ impl FooterLayout {
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            ui.label("Type:");
-            egui::ComboBox::from_id_salt("Type")
-                .selected_text(format!("{:?}", app.message_type))
+            ui.label("Sender:");
+            ComboBox::from_id_salt("context_sender")
+                .selected_text(format!("{:?}", app.ctx_sender))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut app.message_type, MessageType::Message, "Message");
-                    ui.selectable_value(&mut app.message_type, MessageType::Response, "Response");
-                    ui.selectable_value(&mut app.message_type, MessageType::Code, "Code");
+                    ui.selectable_value(&mut app.ctx_sender, ContextSender::Me, "Me");
+                    ui.selectable_value(&mut app.ctx_sender, ContextSender::Peer, "Peer");
                 });
-
-            ui.label("Current context:");
-            ui.add_enabled(
-                false,
-                egui::TextEdit::singleline(&mut match app.ctx_sender_app {
-                    SendByUser::Earth => "Earth".to_string(),
-                    SendByUser::March => "March".to_string(),
-                })
-                .desired_width(100.0),
-            );
-        });
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
+            ui.add_space(4.0);
             ui.label("Send Time:");
-            ui.add(egui::TextEdit::singleline(&mut app.send_time).desired_width(100.0));
+            ui.add(TextEdit::singleline(&mut app.send_time).desired_width(100.0));
             ui.label("Receive Time:");
-            ui.add(egui::TextEdit::singleline(&mut app.receive_time).desired_width(100.0));
+            ui.add(TextEdit::singleline(&mut app.receive_time).desired_width(100.0));
         });
 
+        ui.separator();
         ui.add_space(4.0);
 
         let mut send_message = false;
         ui.horizontal(|ui| {
-            let text_edit = egui::TextEdit::singleline(&mut app.message_to_send)
+            let text_edit = TextEdit::singleline(&mut app.message_to_send)
                 .hint_text("Write a message...")
                 .desired_width(ui.available_width() - 200.0);
 
@@ -54,9 +43,9 @@ impl FooterLayout {
             if ui
                 .add(
                     egui::Button::new("Send")
-                        .fill(egui::Color32::from_rgb(0, 120, 215))
-                        .rounding(egui::Rounding::same(2.0))
-                        .min_size(egui::vec2(65.0, 10.0)),
+                        .fill(Color32::from_rgb(0, 120, 215))
+                        .rounding(Rounding::same(2.0))
+                        .min_size(vec2(65.0, 10.0)),
                 )
                 .clicked()
             {

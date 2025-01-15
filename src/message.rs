@@ -1,9 +1,4 @@
-#[derive(Clone, Debug, PartialEq)]
-pub enum MessageType {
-    Message,
-    Response,
-    Code,
-}
+use serde_yaml::Number;
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)]
@@ -15,42 +10,46 @@ pub enum MessageStatus {
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)]
-pub enum SendByUser {
-    Earth,
-    March,
+pub enum ContextView {
+    Me,
+    Peer,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
+pub enum ContextSender {
+    Me,
+    Peer,
 }
 
 #[derive(Clone)]
 pub struct Message {
+    // pub id: Number, // Improvement could be to use a UUID
+    // pub receive_time: String, // Is set by the receiver once the message is received
+    // pub feedback_receive_time: String, // Is set by sender once the feedback is received
+    // pub transit_time: String, // Is receive_time - send_time
+    pub ctx_view: ContextView, // Improvement could be to use a UUID
+    pub ctx_sender: ContextSender,
     pub send_time: String,
     pub text: String,
     pub shipment_status: MessageStatus,
-    pub message_type: MessageType,
-    // !TODO: Add these fields once delivery and consumption are implemented
-    //pub delivred_at: String,
-    //pub consumed_at: String,
 }
 
 impl Message {
     pub fn send(app: &mut crate::app::ChatApp) {
         app.messages.push(Message {
+            // id: app.message_id.clone(),
+            // receive_time: app.receive_time.clone(),
+            // transit_time: "0".to_string(),
+            // feedback_receive_time: "".to_string(),
             send_time: app.send_time.clone(),
-            //delivred_at: "".to_string(),
-            //consumed_at: "".to_string(),
-            message_type: app.message_type.clone(),
+            ctx_view: app.ctx_view.clone(),
+            ctx_sender: ContextSender::Me,
             shipment_status: MessageStatus::NotDelivered,
             text: app.message_to_send.clone(),
         });
         app.messages.sort_by(|a, b| a.send_time.cmp(&b.send_time));
         app.message_to_send.clear();
-    }
-
-    pub fn get_type_str(&self) -> String {
-        match self.message_type {
-            MessageType::Message => "Message".to_string(),
-            MessageType::Response => "Response".to_string(),
-            MessageType::Code => "Code".to_string(),
-        }
     }
 
     pub fn get_shipment_status_str(&self) -> String {

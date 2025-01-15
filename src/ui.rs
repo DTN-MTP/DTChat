@@ -12,8 +12,8 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        let body = BodyLayout::new(app);
-        body.show(ui);
+        let mut body = BodyLayout::new(app);
+        body.show(app, ui);
     });
 
     egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {

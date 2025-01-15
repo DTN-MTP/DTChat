@@ -1,6 +1,7 @@
 use crate::app::ChatApp;
-use crate::message::SendByUser;
+use crate::message::ContextView;
 use eframe::egui;
+use egui::TextEdit;
 
 pub struct HeaderLayout {
     // pub peers: Vec<String>,
@@ -25,22 +26,22 @@ impl HeaderLayout {
         ui.add_space(10.0);
 
         ui.horizontal(|ui| {
-            ui.label("Context:");
-            ui.radio_value(&mut app.ctx_sender_app, SendByUser::Earth, "Earth");
-            ui.radio_value(&mut app.ctx_sender_app, SendByUser::March, "March");
+            ui.label("Context view:");
+            egui::ComboBox::from_id_salt("context_view")
+                .selected_text(format!("{:?}", app.ctx_view))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut app.ctx_view, ContextView::Me, "Me");
+
+                    ui.selectable_value(&mut app.ctx_view, ContextView::Peer, "Peer")
+                });
         });
         ui.add_space(4.0);
 
-        egui::Grid::new("header_grid")
-            .num_columns(2)
-            .spacing([10.0, 4.0])
-            .show(ui, |ui| {
-                ui.label("Peer Endpoint:");
-                ui.add_enabled(
-                    false,
-                    egui::TextEdit::singleline(&mut self.peer_endpoint.clone()),
-                );
-            });
+        ui.horizontal(|ui| {
+            ui.label("Peer Endpoint:");
+            ui.add_enabled(false, TextEdit::singleline(&mut self.peer_endpoint.clone()));
+        });
+
         // ui.separator();
         // ui.add_space(10.0);
         // Peer List
