@@ -1,19 +1,22 @@
-use crate::message::{ContextSender, ContextView, Message};
+
+
+use crate::message::Message;
+use crate::peer_config::Peer;
+use crate::peer_config::PeerConfig;
 use crate::ui;
 use chrono::{Duration, Local};
 use eframe::egui;
-use serde_yaml::Number;
 
 pub struct ChatApp {
-    pub message_id: Number,
+    // Data
     pub messages: Vec<Message>,
+    pub peers: Vec<Peer>,
+    pub show_view_from: Peer,
+
     pub message_to_send: String,
-    pub send_time: String,
-    pub ctx_view: ContextView,
-    pub ctx_sender: ContextSender,
-    pub view_to_display: ViewToDisplay,
-    pub receive_time: String,
-    pub peer_endpoint: String,
+    pub forging_sender: Peer,
+    pub forging_tx_time: String,
+    pub forging_rx_time: String,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -26,18 +29,48 @@ pub enum ViewToDisplay {
 impl Default for ChatApp {
     fn default() -> Self {
         let recv_time = Local::now() + Duration::hours(1);
+        let peers = PeerConfig::load_from_file("peer-config.yaml").peer_list;
+        let forging_sender = peers[0].clone();
 
         Self {
-            message_id: Number::from(0),
             messages: Vec::new(),
+            peers: peers,
+            show_view_from: forging_sender.clone(),
             message_to_send: String::new(),
-            send_time: Local::now().format("%H:%M:%S").to_string(),
-            receive_time: recv_time.format("%H:%M:%S").to_string(),
-            ctx_view: ContextView::Me,
-            ctx_sender: ContextSender::Me,
-            peer_endpoint: "ipn:<node_id>.1".to_string(),
-            view_to_display: ViewToDisplay::Tchat,
+            forging_sender,
+            forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
+            forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
         }
+    }
+}
+
+impl ChatApp {
+    pub fn sort_messages(&mut self) {
+        let ctx_peer_uuid = self.show_view_from.uuid.clone();
+
+        self.messages.sort_by(|msg_a, msg_b| {
+            let (tx_time, rx_time) = match &msg_a.shipment_status {
+                crate::message::MessageStatus::Sent(tx_time) => (tx_time, tx_time),
+                crate::message::MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
+            };
+            let anchor_a = if msg_a.sender.uuid == ctx_peer_uuid {
+                rx_time
+            } else {
+                tx_time
+            };
+
+            let (tx_time, rx_time) = match &msg_b.shipment_status {
+                crate::message::MessageStatus::Sent(tx_time) => (tx_time, tx_time),
+                crate::message::MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
+            };
+            let anchor_b = if msg_b.sender.uuid == ctx_peer_uuid {
+                rx_time
+            } else {
+                tx_time
+            };
+
+            anchor_a.cmp(&anchor_b)
+        });
     }
 }
 

@@ -1,36 +1,21 @@
-use serde_yaml::Number;
+use std::str::FromStr;
+
+use crate::peer_config::Peer;
 
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
 pub enum MessageStatus {
-    NotDelivered,
-    Delivered, // Mean feedback from the receiver
-    Consumed,
+    Sent(String), // todo : this can maybe be emulated
+    Received(String, String),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
-pub enum ContextView {
-    Me,
-    Peer,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code)]
-pub enum ContextSender {
-    Me,
-    Peer,
-}
 
 #[derive(Clone)]
 pub struct Message {
-    // pub id: Number, // Improvement could be to use a UUID
-    // pub receive_time: String, // Is set by the receiver once the message is received
-    // pub feedback_receive_time: String, // Is set by sender once the feedback is received
-    // pub transit_time: String, // Is receive_time - send_time
-    pub ctx_view: ContextView, // Improvement could be to use a UUID
-    pub ctx_sender: ContextSender,
-    pub send_time: String,
+
+    pub uuid: String, // todo
+    pub response: Option<String>, // String is uuid
+    pub sender: Peer,
+
     pub text: String,
     pub shipment_status: MessageStatus,
 }
@@ -38,25 +23,28 @@ pub struct Message {
 impl Message {
     pub fn send(app: &mut crate::app::ChatApp) {
         app.messages.push(Message {
-            // id: app.message_id.clone(),
-            // receive_time: app.receive_time.clone(),
-            // transit_time: "0".to_string(),
-            // feedback_receive_time: "".to_string(),
-            send_time: app.send_time.clone(),
-            ctx_view: app.ctx_view.clone(),
-            ctx_sender: ContextSender::Me,
-            shipment_status: MessageStatus::NotDelivered,
+            uuid: String::from_str("TODO").unwrap(),
+            response: None,
+            sender: app.forging_sender.clone(),
+
             text: app.message_to_send.clone(),
+            shipment_status: MessageStatus::Received(
+                app.forging_tx_time.clone(),
+                app.forging_rx_time.clone(),
+            ),
         });
-        app.messages.sort_by(|a, b| a.send_time.cmp(&b.send_time));
         app.message_to_send.clear();
+        app.sort_messages();
     }
 
     pub fn get_shipment_status_str(&self) -> String {
-        match self.shipment_status {
-            MessageStatus::Delivered => "Delivered".to_string(),
-            MessageStatus::NotDelivered => "Not Delivered".to_string(),
-            MessageStatus::Consumed => "Consumed".to_string(),
+        match &self.shipment_status {
+            MessageStatus::Sent(tx_time) => {
+                format!("[{}->???][{}]", tx_time, self.sender.name).to_string()
+            }
+            MessageStatus::Received(tx_time, rx_time) => {
+                format!("[{}->{}][{}]", tx_time, rx_time, self.sender.name).to_string()
+            }
         }
     }
 }

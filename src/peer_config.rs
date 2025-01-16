@@ -1,10 +1,24 @@
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct Peer {
-    //pub name: String,
+    pub uuid: String,
+    pub name: String,
     pub endpoint: String,
+    pub color: u32,
+}
+impl Peer {
+    pub fn get_color(&self) -> egui::Color32 {
+        let color_id = self.color % 3;
+
+        match color_id {
+            0 => return egui::Color32::GREEN,
+            1 => return egui::Color32::RED,
+            2 => return egui::Color32::BLUE,
+            _ => return egui::Color32::WHITE,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

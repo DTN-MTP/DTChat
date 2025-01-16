@@ -1,7 +1,7 @@
 use crate::app::ChatApp;
-use crate::layout::body::BodyLayout;
-use crate::layout::footer::FooterLayout;
-use crate::layout::header::HeaderLayout;
+use crate::layout::informations::HeaderLayout;
+use crate::layout::message_list_view::MessageListView;
+use crate::layout::{message_forge::MessageForge, message_prompt::MessagePrompt};
 
 use eframe::egui;
 
@@ -12,12 +12,15 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        let mut body = BodyLayout::new(app);
+        let mut body = MessageListView::new();
         body.show(app, ui);
     });
 
     egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
-        let mut footer = FooterLayout::new();
-        footer.show(app, ui);
+        let mut forge = MessageForge::new();
+        forge.show(app, ui);
+        ui.separator();
+        let mut prompt = MessagePrompt::new();
+        prompt.show(app, ui);
     });
 }
