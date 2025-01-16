@@ -16,7 +16,7 @@ impl MessageListView {
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Sender:");
+                    ui.label("See view from:");
                     ComboBox::from_id_salt("Peer")
                         .selected_text(format!("{:?}", app.show_view_from.name))
                         .show_ui(ui, |ui| {
