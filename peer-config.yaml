@@ -1,0 +1,16 @@
+# DB: not meant for manual modification
+peer_list:
+  - uuid: 0
+    name: john doe
+    endpoint: eid_1
+    color: 0
+
+  - uuid: 1
+    name: alice
+    endpoint: eid_2
+    color: 1
+
+  - uuid: 2
+    name: bob
+    endpoint: eid_2
+    color: 2
