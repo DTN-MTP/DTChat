@@ -53,13 +53,10 @@ impl ChatApp {
                 crate::message::MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
             };
 
-            let anchor_a = {
-                let sender_uuid_a = msg_a.sender.borrow().uuid.clone();
-                if sender_uuid_a == ctx_peer_uuid {
-                    rx_time_a
-                } else {
-                    tx_time_a
-                }
+            let anchor_a = if msg_a.sender.borrow().uuid == ctx_peer_uuid {
+                rx_time_a
+            } else {
+                tx_time_a
             };
 
             let (tx_time_b, rx_time_b) = match &msg_b.shipment_status {

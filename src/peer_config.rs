@@ -21,7 +21,8 @@ impl Peer {
     }
 }
 
-/// New type alias to refer to `Peer` via Rc<RefCell<_>>.
+/// New type alias `SharedPeer` to refer to `Peer` via Rc<RefCell<_>>
+/// Facilitate shared ownership and mutable access to `Peer` instances across various modules
 pub type SharedPeer = Rc<RefCell<Peer>>;
 
 #[derive(Debug, Deserialize)]

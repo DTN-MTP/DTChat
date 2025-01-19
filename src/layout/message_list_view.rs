@@ -1,5 +1,4 @@
 use crate::app::ChatApp;
-// Removed: use crate::peer_config::SharedPeer; 
 use egui::ComboBox;
 use std::rc::Rc;
 
@@ -43,15 +42,13 @@ impl MessageListView {
 
                 for message in &app.messages {
                     ui.horizontal(|ui| {
-                        let sender_color = message.sender.borrow().get_color();
-
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}: {}",
                                 message.get_shipment_status_str(),
                                 message.text
                             ))
-                            .color(sender_color),
+                            .color(message.sender.borrow().get_color()),
                         );
                     });
                 }

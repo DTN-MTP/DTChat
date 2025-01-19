@@ -10,9 +10,7 @@ pub enum MessageStatus {
 
 #[derive(Clone)]
 pub struct Message {
-    #[allow(dead_code)]
     pub uuid: String,                    
-    #[allow(dead_code)]
     pub response: Option<String>,        
     pub sender: SharedPeer,              
 
@@ -45,15 +43,6 @@ impl Message {
             MessageStatus::Received(tx_time, rx_time) => {
                 format!("[{}->{}][{}]", tx_time, rx_time, self.sender.borrow().name).to_string()
             }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn display_info(&self) {
-        println!("UUID: {}", self.uuid);
-        match &self.response {
-            Some(resp) => println!("Response: {}", resp),
-            None => println!("No response"),
         }
     }
 }
