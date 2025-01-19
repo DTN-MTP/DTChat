@@ -25,12 +25,9 @@ impl MessageListView {
                         .selected_text(current_view_from)
                         .show_ui(ui, |ui| {
                             for peer_rc in &app.peers {
-                                let peer = peer_rc.borrow();
-                                let peer_name = peer.name.clone();
-                                let is_selected = Rc::ptr_eq(&app.show_view_from, peer_rc);
-
+                                 let is_selected = Rc::ptr_eq(&app.show_view_from, peer_rc);
                                 // Use selectable_label and manually handle selection
-                                if ui.selectable_label(is_selected, peer_name.clone()).clicked() {
+                                if ui.selectable_label(is_selected, peer_rc.borrow().name.clone()).clicked() {
                                     app.show_view_from = Rc::clone(peer_rc);
                                     call_sort = true;
                                 }
