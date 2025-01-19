@@ -21,12 +21,9 @@ impl MessageForge {
                 .selected_text(current_sender_name)
                 .show_ui(ui, |ui| {
                     for peer_rc in &app.peers {
-                        let peer = peer_rc.borrow();
-                        let peer_name = peer.name.clone();
-
-                        let is_selected = Rc::ptr_eq(&app.forging_sender, peer_rc);
-
-                        if ui.selectable_label(is_selected, peer_name.clone()).clicked() {
+                         let is_selected = Rc::ptr_eq(&app.forging_sender, peer_rc);
+                        // Use selectable_label and manually handle selection
+                        if ui.selectable_label(is_selected, peer_rc.borrow().name.clone()).clicked() {
                             app.forging_sender = Rc::clone(peer_rc);
                         }
                     }
