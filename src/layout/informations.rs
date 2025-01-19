@@ -7,7 +7,7 @@ pub struct HeaderLayout {
 }
 
 impl HeaderLayout {
-    pub fn new(app: &ChatApp) -> Self {
+    pub fn new(app: &ChatApp) -> Self { // Prefix with underscore
         // let peer_config = PeerConfig::load_from_file("peer-config.yaml");
         // let peers = peer_config
         //     .peer_list
@@ -20,7 +20,7 @@ impl HeaderLayout {
         }
     }
 
-    pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
+    pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) { // Prefix with underscores
         // ui.add_space(10.0);
 
         // ui.horizontal(|ui| {
