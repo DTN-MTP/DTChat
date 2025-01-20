@@ -1,6 +1,7 @@
-use std::str::FromStr;
-use crate::peer_config::SharedPeer; 
 use std::rc::Rc;
+use std::str::FromStr;
+
+use super::config::SharedPeer;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageStatus {
@@ -10,9 +11,9 @@ pub enum MessageStatus {
 
 #[derive(Clone)]
 pub struct Message {
-    pub uuid: String,                    
-    pub response: Option<String>,        
-    pub sender: SharedPeer,              
+    pub uuid: String,
+    pub response: Option<String>,
+    pub sender: SharedPeer,
 
     pub text: String,
     pub shipment_status: MessageStatus,
@@ -20,18 +21,18 @@ pub struct Message {
 
 impl Message {
     pub fn send(app: &mut crate::app::ChatApp) {
-        app.messages.push(Message {
+        app.message_panel.messages.push(Message {
             uuid: String::from_str("TODO").unwrap(),
             response: None,
-            sender: Rc::clone(&app.forging_sender), 
+            sender: Rc::clone(&app.message_panel.forging_sender),
 
-            text: app.message_to_send.clone(),
+            text: app.message_panel.message_to_send.clone(),
             shipment_status: MessageStatus::Received(
-                app.forging_tx_time.clone(),
-                app.forging_rx_time.clone(),
+                app.message_panel.forging_tx_time.clone(),
+                app.message_panel.forging_rx_time.clone(),
             ),
         });
-        app.message_to_send.clear();
+        app.message_panel.message_to_send.clear();
         app.sort_messages();
     }
 

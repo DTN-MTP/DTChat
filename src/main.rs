@@ -1,8 +1,7 @@
 mod app;
 mod layout;
-mod message;
-mod peer_config;
-mod ui;
+mod utils;
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
     eframe::run_native(

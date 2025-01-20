@@ -18,16 +18,20 @@ impl MessageListView {
                 ui.horizontal(|ui| {
                     ui.label("See view from:");
 
-                    let current_view_from = app.show_view_from.borrow().name.clone();
+                    let current_view_from = app.message_panel.show_view_from.borrow().name.clone();
 
                     ComboBox::from_id_salt("Peer")
                         .selected_text(current_view_from)
                         .show_ui(ui, |ui| {
                             for peer_rc in &app.peers {
-                                 let is_selected = Rc::ptr_eq(&app.show_view_from, peer_rc);
+                                let is_selected =
+                                    Rc::ptr_eq(&app.message_panel.show_view_from, peer_rc);
                                 // Use selectable_label and manually handle selection
-                                if ui.selectable_label(is_selected, peer_rc.borrow().name.clone()).clicked() {
-                                    app.show_view_from = Rc::clone(peer_rc);
+                                if ui
+                                    .selectable_label(is_selected, peer_rc.borrow().name.clone())
+                                    .clicked()
+                                {
+                                    app.message_panel.show_view_from = Rc::clone(peer_rc);
                                     call_sort = true;
                                 }
                             }
@@ -38,9 +42,7 @@ impl MessageListView {
                     app.sort_messages();
                 }
 
-                ui.separator();
-
-                for message in &app.messages {
+                for message in &app.message_panel.messages {
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new(format!(
