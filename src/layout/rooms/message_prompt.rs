@@ -1,7 +1,9 @@
-use crate::app::ChatApp;
-use crate::message::Message;
+use crate::{
+    app::ChatApp,
+    utils::{colors::BLUE, message::Message},
+};
 use eframe::egui;
-use egui::{vec2, Color32, Rounding, TextEdit};
+use egui::{vec2, Rounding, TextEdit};
 
 pub struct MessagePrompt {}
 
@@ -14,7 +16,7 @@ impl MessagePrompt {
         ui.add_space(4.0);
         let mut send_message = false;
         ui.horizontal(|ui| {
-            let text_edit = TextEdit::singleline(&mut app.message_to_send)
+            let text_edit = TextEdit::singleline(&mut app.message_panel.message_to_send)
                 .hint_text("Write a message...")
                 .desired_width(ui.available_width() - 200.0);
 
@@ -25,7 +27,7 @@ impl MessagePrompt {
             if ui
                 .add(
                     egui::Button::new("Send")
-                        .fill(Color32::from_rgb(0, 120, 215))
+                        .fill(BLUE)
                         .rounding(Rounding::same(2.0))
                         .min_size(vec2(65.0, 10.0)),
                 )
@@ -35,7 +37,7 @@ impl MessagePrompt {
             }
         });
 
-        if send_message && !app.message_to_send.trim().is_empty() {
+        if send_message && !app.message_panel.message_to_send.trim().is_empty() {
             Message::send(app);
         }
         ui.add_space(4.0);

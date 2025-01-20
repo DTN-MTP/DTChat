@@ -14,3 +14,16 @@ peer_list:
     name: bob
     endpoint: eid_2
     color: 2
+
+room_list:
+  - uuid: 0
+    name: room 1
+    participants:
+      - 0
+      - 1
+
+  - uuid: 1
+    name: room 2
+    participants:
+      - 0
+      - 2

@@ -1,56 +1,66 @@
-use crate::message::Message;
-use crate::peer_config::{PeerConfig, SharedPeer};
-use crate::ui;
+use crate::layout::rooms::message_settings_bar::RoomView;
+use crate::layout::ui;
+use crate::utils::config::{AppConfigManager, SharedPeer, SharedRoom};
+use crate::utils::message::MessageStatus;
+use crate::{layout::menu_bar::NavigationItems, utils::message::Message};
 use chrono::{Duration, Local};
 use eframe::egui;
-use std::rc::Rc; 
+use std::rc::Rc;
 
-pub struct ChatApp {
-    pub messages: Vec<Message>,
-    pub peers: Vec<SharedPeer>,
+pub struct MessagePanel {
+    pub message_view: RoomView,
+    pub create_modal_open: bool,
     pub show_view_from: SharedPeer,
-
     pub message_to_send: String,
     pub forging_sender: SharedPeer,
     pub forging_tx_time: String,
     pub forging_rx_time: String,
+    pub rooms: Vec<SharedRoom>,
+    pub messages: Vec<Message>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum ViewToDisplay {
-    Table,
-    LinearGraph,
-    Tchat,
+pub struct ChatApp {
+    pub peers: Vec<SharedPeer>,
+    pub context_menu: NavigationItems,
+    pub message_panel: MessagePanel,
 }
 
 impl Default for ChatApp {
     fn default() -> Self {
         // 1) Load YAML to PeerConfig, then convert to Vec<SharedPeer>.
-        let config = PeerConfig::load_from_file("peer-config.yaml");
-        let shared_peers = config.into_shared_peers();
+        let config = AppConfigManager::load_yaml_from_file("database.yaml");
+        let shared_peers = config.shared_peers();
+        let shared_rooms = config.shared_rooms();
+
         let forging_sender = Rc::clone(&shared_peers[0]);
         let recv_time = Local::now() + Duration::hours(1);
 
         ChatApp {
-            messages: Vec::new(),
             peers: shared_peers,
-            show_view_from: Rc::clone(&forging_sender),
-            message_to_send: String::new(),
-            forging_sender,
-            forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
-            forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
+            context_menu: NavigationItems::default(),
+            message_panel: MessagePanel {
+                message_view: RoomView::default(),
+                create_modal_open: false,
+                show_view_from: Rc::clone(&forging_sender),
+                message_to_send: String::new(),
+                rooms: shared_rooms,
+                forging_sender,
+                forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
+                forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
+                messages: Vec::new(),
+            },
         }
     }
 }
 
 impl ChatApp {
     pub fn sort_messages(&mut self) {
-        let ctx_peer_uuid = self.show_view_from.borrow().uuid.clone();
+        let ctx_peer_uuid = self.message_panel.show_view_from.borrow().uuid.clone();
 
-        self.messages.sort_by(|msg_a, msg_b| {
+        self.message_panel.messages.sort_by(|msg_a, msg_b| {
             let (tx_time_a, rx_time_a) = match &msg_a.shipment_status {
-                crate::message::MessageStatus::Sent(tx_time) => (tx_time, tx_time),
-                crate::message::MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
+                MessageStatus::Sent(tx_time) => (tx_time, tx_time),
+                MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
             };
 
             let anchor_a = if msg_a.sender.borrow().uuid == ctx_peer_uuid {
@@ -60,8 +70,8 @@ impl ChatApp {
             };
 
             let (tx_time_b, rx_time_b) = match &msg_b.shipment_status {
-                crate::message::MessageStatus::Sent(tx_time) => (tx_time, tx_time),
-                crate::message::MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
+                MessageStatus::Sent(tx_time) => (tx_time, tx_time),
+                MessageStatus::Received(tx_time, rx_time) => (tx_time, rx_time),
             };
 
             let anchor_b = if msg_b.sender.borrow().uuid == ctx_peer_uuid {
