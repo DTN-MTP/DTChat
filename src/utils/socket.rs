@@ -32,15 +32,9 @@ pub struct ChatSocket {
 
 impl ChatSocket {
     pub fn new(family: AddressFamily) -> io::Result<Self> {
-        let socket = Socket::new(
-            family.to_domain(),
-            Type::STREAM,
-            Some(Protocol::TCP),
-        )?;
-        
+        let socket = Socket::new(family.to_domain(), Type::STREAM, Some(Protocol::TCP))?;
         socket.set_nonblocking(true)?;
         socket.set_keepalive(true)?;
-        
         Ok(Self { socket })
     }
 
@@ -68,7 +62,8 @@ impl ChatSocket {
         #[cfg(feature = "add_delay")]
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        let mut message = Vec::from(data);
+        let mut message = Vec::with_capacity(data.len() + 1);
+        message.extend_from_slice(data);
         message.push(b'\n');
         
         match self.socket.send(&message) {
@@ -82,22 +77,21 @@ impl ChatSocket {
             }
         }
     }
-    //read response from ncat server
+    /// Reads a response from the ncat server.
     pub fn receive(&self) -> io::Result<Option<String>> {
-        let mut buffer = [MaybeUninit::uninit(); 1024];
+        let mut buffer: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
         match self.socket.recv(&mut buffer) {
-            Ok(size) => {
-                if size > 0 {
-                    let mut data = Vec::with_capacity(size);
-                    for i in 0..size {
-                        data.push(unsafe { buffer[i].assume_init() });
-                    }
-                    if let Ok(message) = String::from_utf8(data) {
-                        return Ok(Some(message));
-                    }
+            Ok(size) if size > 0 => {
+                let data = unsafe { 
+                    std::slice::from_raw_parts(buffer.as_ptr() as *const u8, size)
+                };
+                if let Ok(message) = String::from_utf8(data.to_vec()) {
+                    Ok(Some(message))
+                } else {
+                    Ok(None)
                 }
-                Ok(None)
             }
+            Ok(_) => Ok(None),
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
             Err(e) => Err(e),
         }
