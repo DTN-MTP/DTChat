@@ -1,13 +1,13 @@
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
+use std::mem::MaybeUninit;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::mem::MaybeUninit;
 
 pub enum AddressFamily {
     IPv4,
     IPv6,
-    BP(i32),  
+    BP(i32),
 }
 
 impl AddressFamily {
@@ -15,7 +15,7 @@ impl AddressFamily {
         match self {
             AddressFamily::IPv4 => Domain::IPV4,
             AddressFamily::IPv6 => Domain::IPV6,
-            AddressFamily::BP(af) => Domain::from(*af), 
+            AddressFamily::BP(af) => Domain::from(*af),
         }
     }
 }
@@ -42,9 +42,8 @@ impl ChatSocket {
         #[cfg(feature = "add_delay")]
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        let addr = SocketAddr::from_str("127.0.0.1:8080")
-            .expect("Invalid address");
-        
+        let addr = SocketAddr::from_str("127.0.0.1:8080").expect("Invalid address");
+
         match self.socket.connect(&addr.into()) {
             Ok(_) => {
                 println!("Connected to ncat server");
@@ -65,7 +64,7 @@ impl ChatSocket {
         let mut message = Vec::with_capacity(data.len() + 1);
         message.extend_from_slice(data);
         message.push(b'\n');
-        
+
         match self.socket.send(&message) {
             Ok(size) => {
                 println!("Sent {} bytes", size);
@@ -82,9 +81,8 @@ impl ChatSocket {
         let mut buffer: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
         match self.socket.recv(&mut buffer) {
             Ok(size) if size > 0 => {
-                let data = unsafe { 
-                    std::slice::from_raw_parts(buffer.as_ptr() as *const u8, size)
-                };
+                let data =
+                    unsafe { std::slice::from_raw_parts(buffer.as_ptr() as *const u8, size) };
                 if let Ok(message) = String::from_utf8(data.to_vec()) {
                     Ok(Some(message))
                 } else {

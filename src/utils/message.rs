@@ -1,6 +1,6 @@
+use super::config::SharedPeer;
 use std::rc::Rc;
 use std::str::FromStr;
-use super::config::SharedPeer;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageStatus {
@@ -19,14 +19,14 @@ pub struct Message {
 
 impl Message {
     pub fn send(app: &mut crate::app::ChatApp) {
-        // Try to send via socket if available
         if let Some(socket) = &app.socket {
-            let message = format!("[{}][{}]: {}", 
+            let message = format!(
+                "[{}][{}]: {}",
                 app.message_panel.forging_tx_time,
                 app.message_panel.forging_sender.borrow().name,
                 app.message_panel.message_to_send
             );
-            
+
             if let Err(e) = socket.send(message.as_bytes()) {
                 eprintln!("Socket send error: {}", e);
             }

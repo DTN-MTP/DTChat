@@ -2,7 +2,7 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui;
 use crate::utils::config::{AppConfigManager, SharedPeer, SharedRoom};
 use crate::utils::message::MessageStatus;
-use crate::utils::socket::{ChatSocket, AddressFamily};
+use crate::utils::socket::{AddressFamily, ChatSocket};
 use crate::{layout::menu_bar::NavigationItems, utils::message::Message};
 use chrono::{Duration, Local};
 use eframe::egui;
@@ -24,7 +24,7 @@ pub struct ChatApp {
     pub peers: Vec<SharedPeer>,
     pub context_menu: NavigationItems,
     pub message_panel: MessagePanel,
-    pub socket: Option<ChatSocket>, 
+    pub socket: Option<ChatSocket>,
 }
 
 impl Default for ChatApp {
@@ -51,7 +51,7 @@ impl Default for ChatApp {
                 forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
                 messages: Vec::new(),
             },
-            socket: None, 
+            socket: None,
         }
     }
 }
@@ -91,7 +91,7 @@ impl ChatApp {
         if self.socket.is_none() {
             let mut socket = ChatSocket::new(AddressFamily::IPv4)?;
             // For BP protocol testing: let mut socket = ChatSocket::new(AddressFamily::BP(42))?;
-            
+
             if let Ok(()) = socket.connect() {
                 println!("Socket connected successfully");
                 self.socket = Some(socket);
@@ -103,7 +103,6 @@ impl ChatApp {
     pub fn check_socket_messages(&mut self) {
         if let Some(socket) = &self.socket {
             if let Ok(Some(received)) = socket.receive() {
-                // Create a new message from received data
                 self.message_panel.messages.push(Message {
                     uuid: String::from("RECEIVED"),
                     response: None,
