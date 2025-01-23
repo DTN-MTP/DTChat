@@ -4,14 +4,36 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::mem::MaybeUninit;
 
+pub enum AddressFamily {
+    IPv4,
+    IPv6,
+    BP(i32),  
+}
+
+impl AddressFamily {
+    fn to_domain(&self) -> Domain {
+        match self {
+            AddressFamily::IPv4 => Domain::IPV4,
+            AddressFamily::IPv6 => Domain::IPV6,
+            AddressFamily::BP(af) => Domain::from(*af), 
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ProtoMessage {
+    msg_uuid: String,
+    rx_time: String,
+}
+
 pub struct ChatSocket {
     socket: Socket,
 }
 
 impl ChatSocket {
-    pub fn new() -> io::Result<Self> {
+    pub fn new(family: AddressFamily) -> io::Result<Self> {
         let socket = Socket::new(
-            Domain::IPV4,
+            family.to_domain(),
             Type::STREAM,
             Some(Protocol::TCP),
         )?;
@@ -60,20 +82,23 @@ impl ChatSocket {
             }
         }
     }
-    //maybe read response from ncat?
-    pub fn receive(&self) -> io::Result<Vec<u8>> {
+    //read response from ncat server
+    pub fn receive(&self) -> io::Result<Option<String>> {
         let mut buffer = [MaybeUninit::uninit(); 1024];
         match self.socket.recv(&mut buffer) {
             Ok(size) => {
-                let mut data = Vec::with_capacity(size);
-                for i in 0..size {
-                    data.push(unsafe { buffer[i].assume_init() });
+                if size > 0 {
+                    let mut data = Vec::with_capacity(size);
+                    for i in 0..size {
+                        data.push(unsafe { buffer[i].assume_init() });
+                    }
+                    if let Ok(message) = String::from_utf8(data) {
+                        return Ok(Some(message));
+                    }
                 }
-                Ok(data)
+                Ok(None)
             }
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                Ok(Vec::new())
-            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
             Err(e) => Err(e),
         }
     }

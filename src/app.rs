@@ -2,7 +2,7 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui;
 use crate::utils::config::{AppConfigManager, SharedPeer, SharedRoom};
 use crate::utils::message::MessageStatus;
-use crate::utils::socket::ChatSocket;  
+use crate::utils::socket::{ChatSocket, AddressFamily};
 use crate::{layout::menu_bar::NavigationItems, utils::message::Message};
 use chrono::{Duration, Local};
 use eframe::egui;
@@ -51,7 +51,7 @@ impl Default for ChatApp {
                 forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
                 messages: Vec::new(),
             },
-            socket: None,  // Add this
+            socket: None, 
         }
     }
 }
@@ -89,7 +89,9 @@ impl ChatApp {
 
     pub fn try_connect_socket(&mut self) -> std::io::Result<()> {
         if self.socket.is_none() {
-            let mut socket = ChatSocket::new()?;
+            let mut socket = ChatSocket::new(AddressFamily::IPv4)?;
+            // For BP protocol testing: let mut socket = ChatSocket::new(AddressFamily::BP(42))?;
+            
             if let Ok(()) = socket.connect() {
                 println!("Socket connected successfully");
                 self.socket = Some(socket);
@@ -97,10 +99,30 @@ impl ChatApp {
         }
         Ok(())
     }
+
+    pub fn check_socket_messages(&mut self) {
+        if let Some(socket) = &self.socket {
+            if let Ok(Some(received)) = socket.receive() {
+                // Create a new message from received data
+                self.message_panel.messages.push(Message {
+                    uuid: String::from("RECEIVED"),
+                    response: None,
+                    sender: Rc::clone(&self.message_panel.forging_sender),
+                    text: received,
+                    shipment_status: MessageStatus::Received(
+                        Local::now().format("%H:%M:%S").to_string(),
+                        Local::now().format("%H:%M:%S").to_string(),
+                    ),
+                });
+                self.sort_messages();
+            }
+        }
+    }
 }
 
 impl eframe::App for ChatApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.check_socket_messages();
         ui::display(self, ctx);
     }
 }
