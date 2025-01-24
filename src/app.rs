@@ -17,6 +17,7 @@ pub struct MessagePanel {
     pub forging_rx_time: String,
     pub rooms: Vec<SharedRoom>,
     pub messages: Vec<Message>,
+    pub send_status: Option<String>,
 }
 
 pub struct ChatApp {
@@ -27,7 +28,6 @@ pub struct ChatApp {
 
 impl Default for ChatApp {
     fn default() -> Self {
-        // 1) Load YAML to PeerConfig, then convert to Vec<SharedPeer>.
         let config = AppConfigManager::load_yaml_from_file("database.yaml");
         let shared_peers = config.shared_peers();
         let shared_rooms = config.shared_rooms();
@@ -48,6 +48,7 @@ impl Default for ChatApp {
                 forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
                 forging_rx_time: recv_time.format("%H:%M:%S").to_string(),
                 messages: Vec::new(),
+                send_status: None,
             },
         }
     }
@@ -56,7 +57,6 @@ impl Default for ChatApp {
 impl ChatApp {
     pub fn sort_messages(&mut self) {
         let ctx_peer_uuid = self.message_panel.show_view_from.borrow().uuid.clone();
-
         self.message_panel.messages.sort_by(|msg_a, msg_b| {
             let (tx_time_a, rx_time_a) = match &msg_a.shipment_status {
                 MessageStatus::Sent(tx_time) => (tx_time, tx_time),

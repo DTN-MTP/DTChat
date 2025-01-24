@@ -9,3 +9,7 @@ chrono = "0.4"
 eframe = "0.30.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_yaml = "0.9.34"
+socket2 = "0.4"
+
+[features]
+add_delay = []
