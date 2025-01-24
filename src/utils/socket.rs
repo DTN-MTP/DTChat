@@ -78,7 +78,8 @@ impl SendingSocket for TcpSendingSocket {
 pub enum ProtocolType {
     Udp,
     Tcp,
-    //Bp,
+    #[cfg(feature = "bp")]
+    Bp,
 }
 
 #[cfg(feature = "bp")]
@@ -124,6 +125,7 @@ pub fn create_sending_socket(
     match protocol {
         ProtocolType::Udp => Ok(Box::new(UdpSendingSocket::new(address)?)),
         ProtocolType::Tcp => Ok(Box::new(TcpSendingSocket::new(address)?)),
-        //ProtocolType::Bp => Ok(Box::new(BpSendingSocket::new(address)?)),
+        #[cfg(feature = "bp")]
+        ProtocolType::Bp => Ok(Box::new(BpSendingSocket::new(address)?)),
     }
 }
