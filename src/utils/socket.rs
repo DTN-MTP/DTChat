@@ -78,7 +78,7 @@ impl SendingSocket for TcpSendingSocket {
 pub enum ProtocolType {
     Udp,
     Tcp,
-    Bp,
+    //Bp,
 }
 
 #[cfg(feature = "bp")]
@@ -117,25 +117,6 @@ mod bp_socket {
     }
 }
 
-#[cfg(not(feature = "bp"))]
-mod bp_socket {
-    use super::{SendingSocket, SocketError};
-
-    pub struct BpSendingSocket;
-
-    impl SendingSocket for BpSendingSocket {
-        fn new(_address: &str) -> Result<Self, SocketError> {
-            Ok(BpSendingSocket)
-        }
-        fn send(&mut self, message: &str) -> Result<usize, SocketError> {
-            println!("BP is disabled. Not sending anything.");
-            Ok(message.len())
-        }
-    }
-}
-
-pub use bp_socket::BpSendingSocket;
-
 pub fn create_sending_socket(
     protocol: ProtocolType,
     address: &str,
@@ -143,6 +124,6 @@ pub fn create_sending_socket(
     match protocol {
         ProtocolType::Udp => Ok(Box::new(UdpSendingSocket::new(address)?)),
         ProtocolType::Tcp => Ok(Box::new(TcpSendingSocket::new(address)?)),
-        ProtocolType::Bp => Ok(Box::new(BpSendingSocket::new(address)?)),
+        //ProtocolType::Bp => Ok(Box::new(BpSendingSocket::new(address)?)),
     }
 }

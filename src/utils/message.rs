@@ -27,7 +27,7 @@ impl Message {
 
         let socket_result = match protocol_str.as_str() {
             "tcp" => create_sending_socket(ProtocolType::Tcp, &endpoint),
-            "bp" => create_sending_socket(ProtocolType::Bp, &endpoint),
+            //"bp" => create_sending_socket(ProtocolType::Bp, &endpoint),
             _ => create_sending_socket(ProtocolType::Udp, &endpoint),
         };
 
