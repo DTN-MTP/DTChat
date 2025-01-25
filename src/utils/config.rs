@@ -1,12 +1,18 @@
 use serde::Deserialize;
 use std::{cell::RefCell, fs, rc::Rc};
 
+fn default_protocol() -> String {
+    "udp".to_string()
+}
+
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct PeerAttributes {
     pub uuid: String,
     pub name: String,
     pub endpoint: String,
     pub color: u32,
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
 }
 
 impl PeerAttributes {
@@ -46,7 +52,7 @@ impl AppConfigManager {
     pub fn shared_peers(&self) -> Vec<SharedPeer> {
         self.peer_list
             .iter()
-            .map(|peer| Rc::new(RefCell::new((*peer).clone())))
+            .map(|peer| Rc::new(RefCell::new(peer.clone())))
             .collect()
     }
 

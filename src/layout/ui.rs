@@ -1,11 +1,3 @@
-use crate::app::ChatApp;
-use crate::layout::menu_bar::MenuBar;
-use crate::layout::rooms::message_forge::MessageForge;
-use crate::layout::rooms::message_prompt::MessagePrompt;
-
-use eframe::egui;
-use egui::{CentralPanel, TopBottomPanel};
-
 use super::{
     menu_bar::NavigationItems,
     rooms::{
@@ -13,6 +5,12 @@ use super::{
         views::message_list::MessageListView,
     },
 };
+use crate::app::ChatApp;
+use crate::layout::menu_bar::MenuBar;
+use crate::layout::rooms::message_forge::MessageForge;
+use crate::layout::rooms::message_prompt::MessagePrompt;
+use eframe::egui;
+use egui::{CentralPanel, TopBottomPanel};
 
 pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
     TopBottomPanel::top("menu_bar").show(ctx, |ui| {
@@ -42,9 +40,16 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
             TopBottomPanel::bottom("message_inputs_panel").show(ctx, |ui| {
                 let mut forge = MessageForge::new();
                 forge.show(app, ui);
+
                 ui.separator();
+
                 let mut prompt = MessagePrompt::new();
                 prompt.show(app, ui);
+
+                if let Some(status) = &app.message_panel.send_status {
+                    ui.separator();
+                    ui.label(status);
+                }
             });
         }
 
