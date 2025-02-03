@@ -76,7 +76,7 @@ impl UdpSendingSocket {
 
 impl SendingSocket for UdpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
-        TOKIO_RUNTIME.block_on(async { UdpSendingSocket::async_new(address).await })
+        TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
@@ -114,7 +114,7 @@ impl TcpSendingSocket {
 
 impl SendingSocket for TcpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
-        TOKIO_RUNTIME.block_on(async { TcpSendingSocket::async_new(address).await })
+        TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
@@ -131,6 +131,12 @@ pub enum ProtocolType {
 #[cfg(feature = "bp")]
 mod bp_socket {
     use super::*;
+    const AF_BP: i32 = 28;
+    #[repr(C)]
+    struct sockaddr_bp {
+        sa_family: u16,
+        sa_data: [u8; 14],
+    }
     pub struct BpSendingSocket {
         socket: Option<UdpSocket>,
         addr: SocketAddr,
@@ -145,7 +151,7 @@ mod bp_socket {
             } else {
                 "[::]:0".parse().unwrap()
             };
-            let std_socket = Socket::new(Domain::for_address(addr), Type::DGRAM, None)?;
+            let std_socket = Socket::new_raw(Domain::from_raw(AF_BP), Type::DGRAM, None)?;
             std_socket.bind(&SockAddr::from(local_addr))?;
             std_socket.set_nonblocking(true)?;
             let socket = UdpSocket::from_std(std_socket.into())?;
@@ -166,7 +172,7 @@ mod bp_socket {
     }
     impl SendingSocket for BpSendingSocket {
         fn new(address: &str) -> Result<Self, SocketError> {
-            TOKIO_RUNTIME.block_on(async { BpSendingSocket::async_new(address).await })
+            TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
         }
         fn send(&mut self, message: &str) -> Result<usize, SocketError> {
             TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
