@@ -10,23 +10,20 @@ impl MessageListView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
+        app.sort_messages();
         let mut call_sort = false;
-
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("See view from:");
-
                     let current_view_from = app.message_panel.show_view_from.borrow().name.clone();
-
                     ComboBox::from_id_salt("Peer")
                         .selected_text(current_view_from)
                         .show_ui(ui, |ui| {
                             for peer_rc in &app.peers {
                                 let is_selected =
                                     Rc::ptr_eq(&app.message_panel.show_view_from, peer_rc);
-                                // Use selectable_label and manually handle selection
                                 if ui
                                     .selectable_label(is_selected, peer_rc.borrow().name.clone())
                                     .clicked()
@@ -37,11 +34,9 @@ impl MessageListView {
                             }
                         });
                 });
-
                 if call_sort {
                     app.sort_messages();
                 }
-
                 for message in &app.message_panel.messages {
                     ui.horizontal(|ui| {
                         ui.label(
