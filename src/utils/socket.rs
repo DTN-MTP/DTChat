@@ -3,8 +3,8 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::Error as IoError;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpStream, UdpSocket};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::runtime::Runtime;
 use tokio::time::sleep;
 
@@ -48,13 +48,13 @@ impl UdpSendingSocket {
         let addr: SocketAddr = address
             .parse::<SocketAddr>()
             .map_err(|e| SocketError::Custom(e.to_string()))?;
-        let local_addr: SocketAddr = if addr.is_ipv4() {
-            "0.0.0.0:0".parse().unwrap()
+        let local: SocketAddr = if addr.is_ipv4() {
+            "0.0.0.0:0".parse::<SocketAddr>().unwrap()
         } else {
-            "[::]:0".parse().unwrap()
+            "[::]:0".parse::<SocketAddr>().unwrap()
         };
         let std_socket = Socket::new(Domain::for_address(addr), Type::DGRAM, None)?;
-        std_socket.bind(&SockAddr::from(local_addr))?;
+        std_socket.bind(&SockAddr::from(local))?;
         std_socket.set_nonblocking(true)?;
         let udp_socket = UdpSocket::from_std(std_socket.into())?;
         Ok(Self {
@@ -65,9 +65,8 @@ impl UdpSendingSocket {
     async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
         if let Some(ref mut sock) = self.socket {
             maybe_delay().await;
-            let bytes_sent = sock.send_to(message.as_bytes(), &self.addr).await?;
-            sleep(Duration::from_secs(1)).await;
-            Ok(bytes_sent)
+            let n = sock.send_to(message.as_bytes(), &self.addr).await?;
+            Ok(n)
         } else {
             Err(SocketError::Custom("UDP socket missing".to_string()))
         }
@@ -146,13 +145,13 @@ mod bp_socket {
             let addr: SocketAddr = address
                 .parse::<SocketAddr>()
                 .map_err(|e| SocketError::Custom(e.to_string()))?;
-            let local_addr: SocketAddr = if addr.is_ipv4() {
-                "0.0.0.0:0".parse().unwrap()
+            let local: SocketAddr = if addr.is_ipv4() {
+                "0.0.0.0:0".parse::<SocketAddr>().unwrap()
             } else {
-                "[::]:0".parse().unwrap()
+                "[::]:0".parse::<SocketAddr>().unwrap()
             };
             let std_socket = Socket::new_raw(Domain::from_raw(AF_BP), Type::DGRAM, None)?;
-            std_socket.bind(&SockAddr::from(local_addr))?;
+            std_socket.bind(&SockAddr::from(local))?;
             std_socket.set_nonblocking(true)?;
             let socket = UdpSocket::from_std(std_socket.into())?;
             Ok(Self {
@@ -192,5 +191,82 @@ pub fn create_sending_socket(
         ProtocolType::Tcp => Ok(Box::new(TcpSendingSocket::new(address)?)),
         #[cfg(feature = "bp")]
         ProtocolType::Bp => Ok(Box::new(BpSendingSocket::new(address)?)),
+    }
+}
+
+pub async fn start_udp_listener(address: &str) -> Result<UdpSocket, SocketError> {
+    let addr: SocketAddr = address
+        .parse::<SocketAddr>()
+        .map_err(|e| SocketError::Custom(e.to_string()))?;
+    let socket = UdpSocket::bind(addr).await?;
+    Ok(socket)
+}
+
+pub async fn start_tcp_listener(address: &str) -> Result<TcpListener, SocketError> {
+    let addr: SocketAddr = address
+        .parse::<SocketAddr>()
+        .map_err(|e| SocketError::Custom(e.to_string()))?;
+    let listener = TcpListener::bind(addr).await?;
+    Ok(listener)
+}
+
+pub async fn run_udp_listener(
+    socket: UdpSocket,
+    app: std::sync::Arc<std::sync::Mutex<crate::app::ChatApp>>,
+    local_peer: crate::utils::config::SharedPeer,
+) -> Result<(), SocketError> {
+    let mut buf = [0u8; 1024];
+    loop {
+        match socket.recv_from(&mut buf).await {
+            Ok((n, _addr)) => {
+                let text = String::from_utf8_lossy(&buf[..n]).to_string();
+                let mut locked_app = app.lock().unwrap();
+                crate::utils::message::Message::receive(
+                    &mut locked_app,
+                    &text,
+                    std::sync::Arc::clone(&local_peer),
+                );
+            }
+            Err(e) => {
+                eprintln!("UDP recv error: {}", e);
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        }
+    }
+}
+
+pub async fn run_tcp_listener(
+    listener: TcpListener,
+    app: std::sync::Arc<std::sync::Mutex<crate::app::ChatApp>>,
+    local_peer: crate::utils::config::SharedPeer,
+) -> Result<(), SocketError> {
+    loop {
+        match listener.accept().await {
+            Ok((mut stream, _addr)) => {
+                let mut buf = [0u8; 1024];
+                match stream.read(&mut buf).await {
+                    Ok(n) if n > 0 => {
+                        let text = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let mut locked_app = app.lock().unwrap();
+                        crate::utils::message::Message::receive(
+                            &mut locked_app,
+                            &text,
+                            std::sync::Arc::clone(&local_peer),
+                        );
+                    }
+                    Ok(_) => continue,
+                    Err(e) => {
+                        eprintln!("TCP read error: {}", e);
+                        continue;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("TCP accept error: {}", e);
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        }
     }
 }
