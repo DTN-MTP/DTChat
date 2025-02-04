@@ -4,19 +4,31 @@ peer_list:
     name: john doe
     endpoint: "127.0.0.1:8080"
     protocol: udp
-    color: 0
+    color: 0 
 
   - uuid: 1
     name: alice
     endpoint: "127.0.0.1:12345"
     protocol: udp
-    color: 1
+    color: 1  
 
   - uuid: 2
     name: bob
     endpoint: "127.0.0.1:9990"
     protocol: tcp
-    color: 2
+    color: 2  
+
+  - uuid: 3
+    name: local peer
+    endpoint: "127.0.0.1:7000"
+    protocol: udp
+    color: 3  
+
+  - uuid: 3
+    name: local peer
+    endpoint: "127.0.0.1:7001"
+    protocol: tcp
+    color: 3  
 
 room_list:
   - uuid: 0
