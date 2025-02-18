@@ -59,7 +59,7 @@ impl Message {
                 app.message_panel.send_status = Some(msg);
             }
         }
-        app.message_panel.messages.push(Message {
+        let new_msg = Message {
             uuid: String::from_str("TODO").unwrap(),
             response: None,
             sender: Arc::clone(forging_sender),
@@ -68,14 +68,15 @@ impl Message {
                 app.message_panel.forging_tx_time.clone(),
                 app.message_panel.forging_rx_time.clone(),
             ),
-        });
+        };
+        app.model.lock().unwrap().add_message(new_msg);
         app.message_panel.message_to_send.clear();
         app.sort_messages();
     }
 
     pub fn receive(app: &mut crate::app::ChatApp, text: &str, sender: SharedPeer) {
         let now = Local::now().format("%H:%M:%S").to_string();
-        let msg = Message {
+        let new_msg = Message {
             uuid: String::from("RCVD"),
             response: None,
             sender: Arc::clone(&sender),
@@ -88,7 +89,7 @@ impl Message {
             sender.lock().unwrap().name
         );
         app.message_panel.send_status = Some("Message received successfully.".to_string());
-        app.message_panel.messages.push(msg);
+        app.model.lock().unwrap().add_message(new_msg);
         app.sort_messages();
     }
 

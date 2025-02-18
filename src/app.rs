@@ -8,7 +8,76 @@ use crate::utils::socket::{
 use crate::{layout::menu_bar::NavigationItems, utils::message::Message};
 use chrono::{Duration, Local};
 use eframe::egui;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+pub trait ModelObserver: Send + Sync {
+    fn on_message_added(&self, msg: &Message);
+}
+
+pub struct ChatModel {
+    pub peers: Vec<SharedPeer>,
+    pub rooms: Vec<SharedRoom>,
+    pub messages: Vec<Message>,
+    observers: Vec<Arc<dyn ModelObserver>>,
+}
+
+impl ChatModel {
+    pub fn new(peers: Vec<SharedPeer>, rooms: Vec<SharedRoom>) -> Self {
+        Self {
+            peers,
+            rooms,
+            messages: Vec::new(),
+            observers: Vec::new(),
+        }
+    }
+    pub fn add_observer(&mut self, obs: Arc<dyn ModelObserver>) {
+        self.observers.push(obs);
+    }
+    pub fn add_message(&mut self, msg: Message) {
+        self.messages.push(msg.clone());
+        for obs in &self.observers {
+            obs.on_message_added(&msg);
+        }
+    }
+    pub fn sort_messages(&mut self, ctx_peer_uuid: &str) {
+        self.messages.sort_by(|a, b| {
+            let (tx_a, rx_a) = match &a.shipment_status {
+                MessageStatus::Sent(tx) => (tx, tx),
+                MessageStatus::Received(tx, rx) => (tx, rx),
+            };
+            let (tx_b, rx_b) = match &b.shipment_status {
+                MessageStatus::Sent(tx) => (tx, tx),
+                MessageStatus::Received(tx, rx) => (tx, rx),
+            };
+            let anchor_a = if a.sender.lock().unwrap().uuid == ctx_peer_uuid {
+                rx_a
+            } else {
+                tx_a
+            };
+            let anchor_b = if b.sender.lock().unwrap().uuid == ctx_peer_uuid {
+                rx_b
+            } else {
+                tx_b
+            };
+            anchor_a.cmp(anchor_b)
+        });
+    }
+}
+
+pub struct ChatView {
+    pub model: Arc<Mutex<ChatModel>>,
+}
+
+impl ChatView {
+    pub fn new(model: Arc<Mutex<ChatModel>>) -> Self {
+        Self { model }
+    }
+    pub fn ui(&self, _app: &mut ChatApp, _ctx: &egui::Context) {}
+}
+
+impl ModelObserver for ChatView {
+    fn on_message_added(&self, _msg: &Message) {}
+}
 
 pub struct MessagePanel {
     pub message_view: RoomView,
@@ -24,9 +93,11 @@ pub struct MessagePanel {
 }
 
 pub struct ChatApp {
-    pub peers: Vec<SharedPeer>,
+    pub model: Arc<Mutex<ChatModel>>,
     pub context_menu: NavigationItems,
     pub message_panel: MessagePanel,
+    pub view: Arc<ChatView>,
+    pub peers: Vec<SharedPeer>,
 }
 
 impl Default for ChatApp {
@@ -45,6 +116,13 @@ impl Default for ChatApp {
             TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await.unwrap() });
         let _tcp_listener =
             TOKIO_RUNTIME.block_on(async { start_tcp_listener("127.0.0.1:7001").await.unwrap() });
+        let model = ChatModel::new(shared_peers.clone(), shared_rooms.clone());
+        let model_arc = Arc::new(Mutex::new(model));
+        let view = Arc::new(ChatView::new(Arc::clone(&model_arc)));
+        {
+            let mut lock = model_arc.lock().unwrap();
+            lock.add_observer(Arc::clone(&view) as Arc<dyn ModelObserver>);
+        }
         ChatApp {
             peers: shared_peers,
             context_menu: NavigationItems::default(),
@@ -60,6 +138,8 @@ impl Default for ChatApp {
                 messages: Vec::new(),
                 send_status: None,
             },
+            model: model_arc,
+            view,
         }
     }
 }
@@ -68,7 +148,6 @@ impl ChatApp {
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ui::display(self, ctx);
     }
-
     pub fn sort_messages(&mut self) {
         let ctx_peer_uuid = self
             .message_panel
@@ -77,33 +156,15 @@ impl ChatApp {
             .unwrap()
             .uuid
             .clone();
-        self.message_panel.messages.sort_by(|msg_a, msg_b| {
-            let (tx_time_a, rx_time_a) = match &msg_a.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            let anchor_a = if msg_a.sender.lock().unwrap().uuid == ctx_peer_uuid {
-                rx_time_a
-            } else {
-                tx_time_a
-            };
-            let (tx_time_b, rx_time_b) = match &msg_b.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            let anchor_b = if msg_b.sender.lock().unwrap().uuid == ctx_peer_uuid {
-                rx_time_b
-            } else {
-                tx_time_b
-            };
-            anchor_a.cmp(anchor_b)
-        });
+        self.model.lock().unwrap().sort_messages(&ctx_peer_uuid);
+        let sorted = self.model.lock().unwrap().messages.clone();
+        self.message_panel.messages = sorted;
     }
 }
 
-pub fn init_app() -> Arc<std::sync::Mutex<ChatApp>> {
+pub fn init_app() -> Arc<Mutex<ChatApp>> {
     let app = ChatApp::default();
-    let app_arc = Arc::new(std::sync::Mutex::new(app));
+    let app_arc = Arc::new(Mutex::new(app));
     let udp_socket =
         TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await.unwrap() });
     let tcp_listener =
