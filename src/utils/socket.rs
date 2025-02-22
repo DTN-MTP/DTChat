@@ -49,9 +49,9 @@ impl UdpSendingSocket {
             .parse::<SocketAddr>()
             .map_err(|e| SocketError::Custom(e.to_string()))?;
         let local: SocketAddr = if addr.is_ipv4() {
-            "0.0.0.0:0".parse::<SocketAddr>().unwrap()
+            "0.0.0.0:0".parse().unwrap()
         } else {
-            "[::]:0".parse::<SocketAddr>().unwrap()
+            "[::]:0".parse().unwrap()
         };
         let std_socket = Socket::new(Domain::for_address(addr), Type::DGRAM, None)?;
         std_socket.bind(&SockAddr::from(local))?;
@@ -62,6 +62,7 @@ impl UdpSendingSocket {
             addr,
         })
     }
+
     async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
         if let Some(ref mut sock) = self.socket {
             maybe_delay().await;
@@ -77,6 +78,7 @@ impl SendingSocket for UdpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
         TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
+
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
     }
@@ -99,6 +101,7 @@ impl TcpSendingSocket {
             stream: Some(stream),
         })
     }
+
     async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
         if let Some(ref mut s) = self.stream {
             maybe_delay().await;
@@ -115,6 +118,7 @@ impl SendingSocket for TcpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
         TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
+
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
     }
@@ -136,19 +140,21 @@ mod bp_socket {
         sa_family: u16,
         sa_data: [u8; 14],
     }
+
     pub struct BpSendingSocket {
         socket: Option<UdpSocket>,
         addr: SocketAddr,
     }
+
     impl BpSendingSocket {
         async fn async_new(address: &str) -> Result<Self, SocketError> {
             let addr: SocketAddr = address
                 .parse::<SocketAddr>()
                 .map_err(|e| SocketError::Custom(e.to_string()))?;
             let local: SocketAddr = if addr.is_ipv4() {
-                "0.0.0.0:0".parse::<SocketAddr>().unwrap()
+                "0.0.0.0:0".parse().unwrap()
             } else {
-                "[::]:0".parse::<SocketAddr>().unwrap()
+                "[::]:0".parse().unwrap()
             };
             let std_socket = Socket::new_raw(Domain::from_raw(AF_BP), Type::DGRAM, None)?;
             std_socket.bind(&SockAddr::from(local))?;
@@ -159,6 +165,7 @@ mod bp_socket {
                 addr,
             })
         }
+
         async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
             if let Some(ref mut sock) = self.socket {
                 maybe_delay().await;
@@ -169,10 +176,12 @@ mod bp_socket {
             }
         }
     }
+
     impl SendingSocket for BpSendingSocket {
         fn new(address: &str) -> Result<Self, SocketError> {
             TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
         }
+
         fn send(&mut self, message: &str) -> Result<usize, SocketError> {
             TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
         }
@@ -221,11 +230,11 @@ pub async fn run_udp_listener(
             Ok((n, _addr)) => {
                 let text = String::from_utf8_lossy(&buf[..n]).to_string();
                 let mut locked_app = app.lock().unwrap();
-                crate::utils::message::Message::receive(
-                    &mut locked_app,
-                    &text,
-                    std::sync::Arc::clone(&local_peer),
-                );
+                {
+                    let mut model = locked_app.model.lock().unwrap();
+                    model.receive_message(&text, std::sync::Arc::clone(&local_peer));
+                }
+                locked_app.sort_messages();
             }
             Err(e) => {
                 eprintln!("UDP recv error: {}", e);
@@ -249,11 +258,11 @@ pub async fn run_tcp_listener(
                     Ok(n) if n > 0 => {
                         let text = String::from_utf8_lossy(&buf[..n]).to_string();
                         let mut locked_app = app.lock().unwrap();
-                        crate::utils::message::Message::receive(
-                            &mut locked_app,
-                            &text,
-                            std::sync::Arc::clone(&local_peer),
-                        );
+                        {
+                            let mut model = locked_app.model.lock().unwrap();
+                            model.receive_message(&text, std::sync::Arc::clone(&local_peer));
+                        }
+                        locked_app.sort_messages();
                     }
                     Ok(_) => continue,
                     Err(e) => {

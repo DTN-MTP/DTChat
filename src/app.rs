@@ -1,17 +1,22 @@
+use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui;
 use crate::utils::config::{AppConfigManager, SharedPeer, SharedRoom};
-use crate::utils::message::MessageStatus;
+use crate::utils::message::{Message, MessageStatus};
 use crate::utils::socket::{
     run_tcp_listener, run_udp_listener, start_tcp_listener, start_udp_listener, TOKIO_RUNTIME,
 };
-use crate::{layout::menu_bar::NavigationItems, utils::message::Message};
 use chrono::{Duration, Local};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
+pub enum AppEvent {
+    MessageSent(Message),
+    MessageReceived(Message),
+}
+
 pub trait ModelObserver: Send + Sync {
-    fn on_message_added(&self, msg: &Message);
+    fn on_event(&self, event: &AppEvent);
 }
 
 pub struct ChatModel {
@@ -30,15 +35,77 @@ impl ChatModel {
             observers: Vec::new(),
         }
     }
+
     pub fn add_observer(&mut self, obs: Arc<dyn ModelObserver>) {
         self.observers.push(obs);
     }
-    pub fn add_message(&mut self, msg: Message) {
-        self.messages.push(msg.clone());
+
+    pub fn notify_observers(&self, event: AppEvent) {
         for obs in &self.observers {
-            obs.on_message_added(&msg);
+            obs.on_event(&event);
         }
     }
+
+    pub fn add_message(&mut self, msg: Message) {
+        self.messages.push(msg.clone());
+        self.notify_observers(AppEvent::MessageReceived(msg));
+    }
+
+    pub fn send_message(&mut self, app: &mut ChatApp) {
+        let forging_sender = &app.message_panel.forging_sender;
+        let protocol = forging_sender.lock().unwrap().protocol.clone();
+        let endpoint = forging_sender.lock().unwrap().endpoint.clone();
+        let text = app.message_panel.message_to_send.clone();
+        let socket = match protocol.as_str() {
+            "tcp" => crate::utils::socket::create_sending_socket(
+                crate::utils::socket::ProtocolType::Tcp,
+                &endpoint,
+            ),
+            #[cfg(feature = "bp")]
+            "bp" => crate::utils::socket::create_sending_socket(
+                crate::utils::socket::ProtocolType::Bp,
+                &endpoint,
+            ),
+            _ => crate::utils::socket::create_sending_socket(
+                crate::utils::socket::ProtocolType::Udp,
+                &endpoint,
+            ),
+        };
+        let msg = if let Err(e) = socket.and_then(|mut s| s.send(&text)) {
+            Message {
+                uuid: "ERR".to_string(),
+                response: None,
+                sender: Arc::clone(forging_sender),
+                text: format!("Socket error: {:?}", e),
+                shipment_status: MessageStatus::Sent(String::new()),
+            }
+        } else {
+            Message {
+                uuid: "TODO".to_string(),
+                response: None,
+                sender: Arc::clone(forging_sender),
+                text,
+                shipment_status: MessageStatus::Sent(Local::now().format("%H:%M:%S").to_string()),
+            }
+        };
+        self.add_message(msg.clone());
+        self.notify_observers(AppEvent::MessageSent(msg));
+        app.message_panel.message_to_send.clear();
+        app.sort_messages();
+    }
+
+    pub fn receive_message(&mut self, text: &str, sender: SharedPeer) {
+        let now = Local::now().format("%H:%M:%S").to_string();
+        let msg = Message {
+            uuid: "RCVD".to_string(),
+            response: None,
+            sender,
+            text: text.to_string(),
+            shipment_status: MessageStatus::Received(now.clone(), now),
+        };
+        self.add_message(msg);
+    }
+
     pub fn sort_messages(&mut self, ctx_peer_uuid: &str) {
         self.messages.sort_by(|a, b| {
             let (tx_a, rx_a) = match &a.shipment_status {
@@ -69,14 +136,13 @@ pub struct ChatView {
 }
 
 impl ChatView {
-    pub fn new(model: Arc<Mutex<ChatModel>>) -> Self {
-        Self { model }
+    pub fn ui(app: &mut crate::app::ChatApp, ctx: &egui::Context) {
+        ui::display(app, ctx);
     }
-    pub fn ui(&self, _app: &mut ChatApp, _ctx: &egui::Context) {}
 }
 
 impl ModelObserver for ChatView {
-    fn on_message_added(&self, _msg: &Message) {}
+    fn on_event(&self, _event: &AppEvent) {}
 }
 
 pub struct MessagePanel {
@@ -118,7 +184,9 @@ impl Default for ChatApp {
             TOKIO_RUNTIME.block_on(async { start_tcp_listener("127.0.0.1:7001").await.unwrap() });
         let model = ChatModel::new(shared_peers.clone(), shared_rooms.clone());
         let model_arc = Arc::new(Mutex::new(model));
-        let view = Arc::new(ChatView::new(Arc::clone(&model_arc)));
+        let view = Arc::new(ChatView {
+            model: Arc::clone(&model_arc),
+        });
         {
             let mut lock = model_arc.lock().unwrap();
             lock.add_observer(Arc::clone(&view) as Arc<dyn ModelObserver>);
@@ -146,8 +214,9 @@ impl Default for ChatApp {
 
 impl ChatApp {
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ui::display(self, ctx);
+        ChatView::ui(self, ctx);
     }
+
     pub fn sort_messages(&mut self) {
         let ctx_peer_uuid = self
             .message_panel

@@ -40,19 +40,15 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
             TopBottomPanel::bottom("message_inputs_panel").show(ctx, |ui| {
                 let mut forge = MessageForge::new();
                 forge.show(app, ui);
-
                 ui.separator();
-
                 let mut prompt = MessagePrompt::new();
                 prompt.show(app, ui);
-
                 if let Some(status) = &app.message_panel.send_status {
                     ui.separator();
                     ui.label(status);
                 }
             });
         }
-
         NavigationItems::Contacts => {
             CentralPanel::default().show(ctx, |ui| {
                 ui.label("Contacts");
