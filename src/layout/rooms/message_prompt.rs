@@ -1,4 +1,5 @@
-use crate::{app::ChatApp, utils::colors::COLORS};
+use crate::app::ChatApp;
+use crate::utils::colors::COLORS;
 use eframe::egui;
 use egui::{vec2, Rounding, TextEdit};
 
@@ -37,12 +38,7 @@ impl MessagePrompt {
                 app.message_panel.send_status =
                     Some("Cannot send message using local peer".to_string());
             } else {
-                let forging_sender = app.message_panel.forging_sender.clone();
-                let text_to_send = app.message_panel.message_to_send.clone();
-                {
-                    let mut model = app.model.lock().unwrap();
-                    model.send_message(forging_sender, text_to_send);
-                }
+                app.process_send_message();
                 app.message_panel.message_to_send.clear();
                 app.sort_messages();
             }

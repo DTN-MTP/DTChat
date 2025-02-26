@@ -4,7 +4,7 @@ use crate::layout::ui;
 use crate::utils::config::{AppConfigManager, SharedPeer, SharedRoom};
 use crate::utils::message::{Message, MessageStatus};
 use crate::utils::socket::{
-    run_tcp_listener, run_udp_listener, start_tcp_listener, start_udp_listener, TOKIO_RUNTIME,
+    create_sending_socket, DefaultSocketController, ProtocolType, SocketController, SocketObserver,
 };
 use chrono::{Duration, Local};
 use eframe::egui;
@@ -51,25 +51,16 @@ impl ChatModel {
         self.notify_observers(AppEvent::MessageReceived(msg));
     }
 
-    pub fn send_message(&mut self, app: &mut ChatApp) {
-        let forging_sender = &app.message_panel.forging_sender;
+    pub fn send_message(&mut self, panel: &mut MessagePanel) {
+        let forging_sender = &panel.forging_sender;
         let protocol = forging_sender.lock().unwrap().protocol.clone();
         let endpoint = forging_sender.lock().unwrap().endpoint.clone();
-        let text = app.message_panel.message_to_send.clone();
+        let text = panel.message_to_send.clone();
         let socket = match protocol.as_str() {
-            "tcp" => crate::utils::socket::create_sending_socket(
-                crate::utils::socket::ProtocolType::Tcp,
-                &endpoint,
-            ),
+            "tcp" => create_sending_socket(ProtocolType::Tcp, &endpoint),
             #[cfg(feature = "bp")]
-            "bp" => crate::utils::socket::create_sending_socket(
-                crate::utils::socket::ProtocolType::Bp,
-                &endpoint,
-            ),
-            _ => crate::utils::socket::create_sending_socket(
-                crate::utils::socket::ProtocolType::Udp,
-                &endpoint,
-            ),
+            "bp" => create_sending_socket(ProtocolType::Bp, &endpoint),
+            _ => create_sending_socket(ProtocolType::Udp, &endpoint),
         };
         let msg = if let Err(e) = socket.and_then(|mut s| s.send(&text)) {
             Message {
@@ -90,8 +81,7 @@ impl ChatModel {
         };
         self.add_message(msg.clone());
         self.notify_observers(AppEvent::MessageSent(msg));
-        app.message_panel.message_to_send.clear();
-        app.sort_messages();
+        panel.message_to_send.clear();
     }
 
     pub fn receive_message(&mut self, text: &str, sender: SharedPeer) {
@@ -131,12 +121,23 @@ impl ChatModel {
     }
 }
 
+impl ModelObserver for ChatModel {
+    fn on_event(&self, _event: &AppEvent) {}
+}
+
+impl SocketObserver for Mutex<ChatModel> {
+    fn on_socket_event(&self, text: &str, sender: SharedPeer) {
+        let mut model = self.lock().unwrap();
+        model.receive_message(text, sender);
+    }
+}
+
 pub struct ChatView {
     pub model: Arc<Mutex<ChatModel>>,
 }
 
 impl ChatView {
-    pub fn ui(app: &mut crate::app::ChatApp, ctx: &egui::Context) {
+    pub fn ui(app: &mut ChatApp, ctx: &egui::Context) {
         ui::display(app, ctx);
     }
 }
@@ -164,6 +165,17 @@ pub struct ChatApp {
     pub message_panel: MessagePanel,
     pub view: Arc<ChatView>,
     pub peers: Vec<SharedPeer>,
+    pub socket_controller: Arc<Mutex<dyn SocketController + Send + Sync>>,
+}
+
+impl ChatApp {
+    pub fn process_send_message(&mut self) {
+        {
+            let mut model = self.model.lock().unwrap();
+            model.send_message(&mut self.message_panel);
+        }
+        self.sort_messages();
+    }
 }
 
 impl Default for ChatApp {
@@ -178,10 +190,6 @@ impl Default for ChatApp {
             .clone();
         let forging_sender = Arc::clone(&local_peer);
         let recv_time = Local::now() + Duration::hours(1);
-        let _udp_listener =
-            TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await.unwrap() });
-        let _tcp_listener =
-            TOKIO_RUNTIME.block_on(async { start_tcp_listener("127.0.0.1:7001").await.unwrap() });
         let model = ChatModel::new(shared_peers.clone(), shared_rooms.clone());
         let model_arc = Arc::new(Mutex::new(model));
         let view = Arc::new(ChatView {
@@ -191,7 +199,15 @@ impl Default for ChatApp {
             let mut lock = model_arc.lock().unwrap();
             lock.add_observer(Arc::clone(&view) as Arc<dyn ModelObserver>);
         }
-        ChatApp {
+        let socket_controller =
+            DefaultSocketController::init_controller(Arc::clone(&local_peer)).unwrap();
+        {
+            socket_controller
+                .lock()
+                .unwrap()
+                .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
+        }
+        Self {
             peers: shared_peers,
             context_menu: NavigationItems::default(),
             message_panel: MessagePanel {
@@ -208,6 +224,7 @@ impl Default for ChatApp {
             },
             model: model_arc,
             view,
+            socket_controller,
         }
     }
 }
@@ -232,29 +249,5 @@ impl ChatApp {
 }
 
 pub fn init_app() -> Arc<Mutex<ChatApp>> {
-    let app = ChatApp::default();
-    let app_arc = Arc::new(Mutex::new(app));
-    let udp_socket =
-        TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await.unwrap() });
-    let tcp_listener =
-        TOKIO_RUNTIME.block_on(async { start_tcp_listener("127.0.0.1:7001").await.unwrap() });
-    {
-        let app_clone = Arc::clone(&app_arc);
-        let local_peer_clone = Arc::clone(&app_arc.lock().unwrap().message_panel.show_view_from);
-        TOKIO_RUNTIME.spawn(async move {
-            run_udp_listener(udp_socket, app_clone, local_peer_clone)
-                .await
-                .unwrap();
-        });
-    }
-    {
-        let app_clone = Arc::clone(&app_arc);
-        let local_peer_clone = Arc::clone(&app_arc.lock().unwrap().message_panel.show_view_from);
-        TOKIO_RUNTIME.spawn(async move {
-            run_tcp_listener(tcp_listener, app_clone, local_peer_clone)
-                .await
-                .unwrap();
-        });
-    }
-    app_arc
+    Arc::new(Mutex::new(ChatApp::default()))
 }
