@@ -3,7 +3,7 @@ use crate::utils::colors::COLORS;
 use crate::utils::message::{Message, MessageStatus};
 use chrono::Local;
 use eframe::egui;
-use egui::{vec2, Rounding, TextEdit};
+use egui::{vec2, CornerRadius, TextEdit};
 
 pub struct MessagePrompt {}
 
@@ -27,7 +27,7 @@ impl MessagePrompt {
                 .add(
                     egui::Button::new("Send")
                         .fill(COLORS[2])
-                        .rounding(Rounding::same(2.0))
+                        .corner_radius(CornerRadius::same(2))
                         .min_size(vec2(65.0, 10.0)),
                 )
                 .clicked()
@@ -51,19 +51,10 @@ impl MessagePrompt {
                         Local::now().format("%H:%M:%S").to_string(),
                     ),
                 };
-                {
-                    let mut model = app.model.lock().unwrap();
-                    match model.send_message(&mut new_msg) {
-                        Ok(_) => {
-                            model.add_message(new_msg);
-                        }
-                        Err(_e) => {
-                            app.message_panel.send_status = Some("Connection refused".to_string());
-                        }
-                    }
-                }
+
+                let mut model = app.model.lock().unwrap();
+                model.send_message(&mut new_msg);
                 app.message_panel.message_to_send.clear();
-                app.sort_messages();
             }
         }
         ui.add_space(4.0);

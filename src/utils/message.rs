@@ -6,6 +6,9 @@ pub enum MessageStatus {
     Received(String, String),
 }
 
+
+
+
 #[derive(Clone)]
 pub struct Message {
     pub uuid: String,

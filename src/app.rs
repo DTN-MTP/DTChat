@@ -8,18 +8,61 @@ use crate::utils::socket::{
 };
 use chrono::{Duration, Local};
 use eframe::egui;
+use std::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 
 pub enum AppEvent {
+    SendFailed(Message),
     MessageSent(Message),
     MessageReceived(Message),
 }
+
+pub enum SortStrategy {
+    Standard,
+    Relative(String)
+}
+
+fn standard_cmp(a: &Message, b: &Message) -> Ordering {
+    let (tx_a, rx_a) = match &a.shipment_status {
+        MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Received(tx, rx) => (tx, rx),
+    };
+    let (tx_b, rx_b) = match &b.shipment_status {
+        MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Received(tx, rx) => (tx, rx),
+    };
+    tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
+}
+
+fn relative_cmp(a: &Message, b: &Message, ctx_peer_uuid: &str) -> Ordering {
+    let (tx_a, rx_a) = match &a.shipment_status {
+        MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Received(tx, rx) => (tx, rx),
+    };
+    let (tx_b, rx_b) = match &b.shipment_status {
+        MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Received(tx, rx) => (tx, rx),
+    };
+    let anchor_a = if a.sender.lock().unwrap().uuid == ctx_peer_uuid {
+        rx_a
+    } else {
+        tx_a
+    };
+    let anchor_b = if b.sender.lock().unwrap().uuid == ctx_peer_uuid {
+        rx_b
+    } else {
+        tx_b
+    };
+    return anchor_a.cmp(anchor_b)
+}
+
 
 pub trait ModelObserver: Send + Sync {
     fn on_event(&self, event: &AppEvent);
 }
 
 pub struct ChatModel {
+    pub sort_strategy: SortStrategy,
     pub peers: Vec<SharedPeer>,
     pub rooms: Vec<SharedRoom>,
     pub messages: Vec<Message>,
@@ -29,6 +72,7 @@ pub struct ChatModel {
 impl ChatModel {
     pub fn new(peers: Vec<SharedPeer>, rooms: Vec<SharedRoom>) -> Self {
         Self {
+            sort_strategy: SortStrategy::Standard,
             peers,
             rooms,
             messages: Vec::new(),
@@ -46,13 +90,21 @@ impl ChatModel {
         }
     }
 
-    pub fn add_message(&mut self, msg: Message) {
-        self.messages.push(msg.clone());
-        self.sort_messages_internally();
-        self.notify_observers(AppEvent::MessageReceived(msg));
+    pub fn add_message(&mut self, new_msg: Message) {
+
+        let idx = match &self.sort_strategy {
+            SortStrategy::Standard => self.messages
+            .binary_search_by(|msg| standard_cmp(msg, &new_msg))
+            .unwrap_or_else(|i| i),
+            SortStrategy::Relative(ctx_peer_uuid) => self.messages
+            .binary_search_by(|msg| relative_cmp(msg, &new_msg, ctx_peer_uuid.as_str()))
+            .unwrap_or_else(|i| i),
+        };
+        self.messages.insert(idx, new_msg.clone());
+        self.notify_observers(AppEvent::MessageReceived(new_msg));
     }
 
-    pub fn send_message(&mut self, msg: &mut Message) -> Result<(), String> {
+    pub fn send_message(&mut self, msg: &mut Message) {
         let protocol = msg.sender.lock().unwrap().protocol.clone();
         let endpoint = msg.sender.lock().unwrap().endpoint.clone();
         let socket = match protocol.as_str() {
@@ -63,12 +115,13 @@ impl ChatModel {
         };
         if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
             eprintln!("Failed to send via TCP/UDP: {:?}", e);
-            return Err(format!("{:?}", e));
+            self.notify_observers(AppEvent::SendFailed(msg.clone()));
+            return;
         }
         msg.uuid = "SENT".to_string();
         msg.shipment_status = MessageStatus::Sent(Local::now().format("%H:%M:%S").to_string());
+        self.add_message(msg.clone());
         self.notify_observers(AppEvent::MessageSent(msg.clone()));
-        Ok(())
     }
 
     pub fn receive_message(&mut self, text: &str, sender: SharedPeer) {
@@ -83,42 +136,12 @@ impl ChatModel {
         self.add_message(msg);
     }
 
-    fn sort_messages_internally(&mut self) {
-        self.messages.sort_by(|a, b| {
-            let (tx_a, rx_a) = match &a.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            let (tx_b, rx_b) = match &b.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
-        });
-    }
+    pub fn sort_messages(&mut self) {
 
-    pub fn sort_messages(&mut self, ctx_peer_uuid: &str) {
-        self.messages.sort_by(|a, b| {
-            let (tx_a, rx_a) = match &a.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            let (tx_b, rx_b) = match &b.shipment_status {
-                MessageStatus::Sent(tx) => (tx, tx),
-                MessageStatus::Received(tx, rx) => (tx, rx),
-            };
-            let anchor_a = if a.sender.lock().unwrap().uuid == ctx_peer_uuid {
-                rx_a
-            } else {
-                tx_a
-            };
-            let anchor_b = if b.sender.lock().unwrap().uuid == ctx_peer_uuid {
-                rx_b
-            } else {
-                tx_b
-            };
-            anchor_a.cmp(anchor_b)
-        });
+        match &self.sort_strategy{
+            SortStrategy::Standard => self.messages.sort_by(|a, b | standard_cmp(a, b)),
+            SortStrategy::Relative(for_peer) => self.messages.sort_by(|a, b| relative_cmp(a, b, for_peer.as_str())),
+        }
     }
 }
 
@@ -133,19 +156,6 @@ impl SocketObserver for Mutex<ChatModel> {
     }
 }
 
-pub struct ChatView {
-    pub model: Arc<Mutex<ChatModel>>,
-}
-
-impl ChatView {
-    pub fn ui(app: &mut ChatApp, ctx: &egui::Context) {
-        ui::display(app, ctx);
-    }
-}
-
-impl ModelObserver for ChatView {
-    fn on_event(&self, _event: &AppEvent) {}
-}
 
 pub struct MessagePanel {
     pub message_view: RoomView,
@@ -164,7 +174,6 @@ pub struct ChatApp {
     pub model: Arc<Mutex<ChatModel>>,
     pub context_menu: NavigationItems,
     pub message_panel: MessagePanel,
-    pub view: Arc<ChatView>,
     pub peers: Vec<SharedPeer>,
     pub socket_controller: Arc<Mutex<dyn SocketController + Send + Sync>>,
 }
@@ -183,13 +192,7 @@ impl Default for ChatApp {
         let recv_time = Local::now() + Duration::hours(1);
         let model = ChatModel::new(shared_peers.clone(), shared_rooms.clone());
         let model_arc = Arc::new(Mutex::new(model));
-        let view = Arc::new(ChatView {
-            model: Arc::clone(&model_arc),
-        });
-        {
-            let mut lock = model_arc.lock().unwrap();
-            lock.add_observer(Arc::clone(&view) as Arc<dyn ModelObserver>);
-        }
+
         let socket_controller =
             DefaultSocketController::init_controller(Arc::clone(&local_peer)).unwrap();
         {
@@ -198,7 +201,7 @@ impl Default for ChatApp {
                 .unwrap()
                 .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
         }
-        Self {
+        let app = Self {
             peers: shared_peers,
             context_menu: NavigationItems::default(),
             message_panel: MessagePanel {
@@ -214,34 +217,40 @@ impl Default for ChatApp {
                 send_status: None,
             },
             model: model_arc,
-            view,
             socket_controller,
-        }
+        };
+        return app;
     }
 }
 
 impl ChatApp {
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ChatView::ui(self, ctx);
+        ui::display(self, ctx);
     }
 
-    pub fn sort_messages(&mut self) {
-        let ctx_peer_uuid = self
-            .message_panel
-            .show_view_from
-            .lock()
-            .unwrap()
-            .uuid
-            .clone();
-        let sorted = {
+    pub fn sort_messages(&mut self, peer_name: String) {
+
             let mut model = self.model.lock().unwrap();
-            model.sort_messages(&ctx_peer_uuid);
-            model.messages.clone()
-        };
-        self.message_panel.messages = sorted;
+            model.sort_strategy = SortStrategy::Relative(peer_name);
+            model.sort_messages();
+    }
+}
+
+impl ModelObserver for Mutex<ChatApp> {
+    fn on_event(&self, event: &AppEvent) {
+        // match event {
+        //     AppEvent::SendFailed(message) => self.lock().unwrap().message_panel.send_status = Some("Send Error".to_string()),
+        //     AppEvent::MessageSent(message) => self.lock().unwrap().message_panel.send_status = Some("Message sent".to_string()),
+        //     AppEvent::MessageReceived(message) => self.lock().unwrap().message_panel.send_status = Some("Message received".to_string()),
+        // }
     }
 }
 
 pub fn init_app() -> Arc<Mutex<ChatApp>> {
-    Arc::new(Mutex::new(ChatApp::default()))
+    let app =  ChatApp::default();
+    let model_arc = app.model.clone();
+    let app_arc = Arc::new(Mutex::new(app));
+
+    model_arc.lock().unwrap().add_observer(app_arc.clone() as Arc<dyn ModelObserver>);
+    return app_arc;
 }

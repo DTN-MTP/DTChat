@@ -10,8 +10,7 @@ impl MessageListView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
-        app.sort_messages();
-        let mut call_sort = false;
+        let mut call_sort = None;
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
@@ -34,17 +33,17 @@ impl MessageListView {
 
                                 if ui.selectable_label(is_selected, peer_name).clicked() {
                                     app.message_panel.show_view_from = Arc::clone(peer_arc);
-                                    call_sort = true;
+                                    call_sort = Some(peer_arc.lock().as_ref().unwrap().name.clone());
                                 }
                             }
                         });
                 });
 
-                if call_sort {
-                    app.sort_messages();
+                if let Some(peer_name) = call_sort {
+                    app.sort_messages(peer_name);
                 }
 
-                for message in &app.message_panel.messages {
+                for message in &app.model.lock().unwrap().messages {
                     ui.horizontal(|ui| {
                         let sender_lock = message.sender.lock().unwrap();
                         let color = sender_lock.get_color();

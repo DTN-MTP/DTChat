@@ -13,7 +13,7 @@ impl MessageForge {
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            ui.label("Sender:");
+            ui.label("Send to:");
             let forging_sender = app.message_panel.forging_sender.lock().unwrap();
             let current_sender_name = forging_sender.name.clone();
             drop(forging_sender);
