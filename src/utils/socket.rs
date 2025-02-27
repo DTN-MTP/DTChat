@@ -75,7 +75,14 @@ impl UdpSendingSocket {
     async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
         if let Some(ref mut sock) = self.socket {
             maybe_delay().await;
+            println!(
+                "UDP: sending {} bytes to {}, content: \"{}\"",
+                message.len(),
+                self.addr,
+                message
+            );
             let n = sock.send_to(message.as_bytes(), &self.addr).await?;
+            println!("UDP: successfully sent {} bytes to {}", n, self.addr);
             Ok(n)
         } else {
             Err(SocketError::Custom("UDP socket missing".to_string()))
@@ -87,6 +94,7 @@ impl SendingSocket for UdpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
         TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
+
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
     }
@@ -102,7 +110,10 @@ impl TcpSendingSocket {
             .parse()
             .map_err(|e: std::net::AddrParseError| SocketError::Custom(e.to_string()))?;
         let std_socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
-        std_socket.connect(&SockAddr::from(addr))?;
+        if let Err(e) = std_socket.connect(&SockAddr::from(addr)) {
+            eprintln!("TCP: failed to connect to {}: {:?}", addr, e);
+            return Err(SocketError::Io(e));
+        }
         std_socket.set_nonblocking(true)?;
         let stream = TcpStream::from_std(std_socket.into())?;
         Ok(Self {
@@ -113,8 +124,20 @@ impl TcpSendingSocket {
     async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
         if let Some(ref mut s) = self.stream {
             maybe_delay().await;
-            s.write_all(message.as_bytes()).await?;
-            s.shutdown().await?;
+            println!(
+                "TCP: sending {} bytes to remote, content: \"{}\"",
+                message.len(),
+                message
+            );
+            if let Err(e) = s.write_all(message.as_bytes()).await {
+                eprintln!("TCP: write error {:?}", e);
+                return Err(SocketError::Io(e));
+            }
+            if let Err(e) = s.shutdown().await {
+                eprintln!("TCP: shutdown error {:?}", e);
+                return Err(SocketError::Io(e));
+            }
+            println!("TCP: successfully sent {} bytes to remote", message.len());
             Ok(message.len())
         } else {
             Err(SocketError::Custom("TCP stream missing".to_string()))
@@ -126,6 +149,7 @@ impl SendingSocket for TcpSendingSocket {
     fn new(address: &str) -> Result<Self, SocketError> {
         TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
     }
+
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
     }
@@ -140,10 +164,12 @@ mod bp_socket {
         sa_family: u16,
         sa_data: [u8; 14],
     }
+
     pub struct BpSendingSocket {
         socket: Option<UdpSocket>,
         addr: SocketAddr,
     }
+
     impl BpSendingSocket {
         async fn async_new(address: &str) -> Result<Self, SocketError> {
             let addr: SocketAddr = address
@@ -163,25 +189,34 @@ mod bp_socket {
                 addr,
             })
         }
+
         async fn async_send(&mut self, message: &str) -> Result<usize, SocketError> {
             if let Some(ref mut sock) = self.socket {
                 maybe_delay().await;
-                println!("(BP) Stub sending '{}' to '{}'", message, self.addr);
+                println!(
+                    "(BP) Stub sending '{}' ({} bytes) to '{}'",
+                    message,
+                    message.len(),
+                    self.addr
+                );
                 Ok(message.len())
             } else {
                 Err(SocketError::Custom("BP socket missing".to_string()))
             }
         }
     }
+
     impl SendingSocket for BpSendingSocket {
         fn new(address: &str) -> Result<Self, SocketError> {
             TOKIO_RUNTIME.block_on(async { Self::async_new(address).await })
         }
+
         fn send(&mut self, message: &str) -> Result<usize, SocketError> {
             TOKIO_RUNTIME.block_on(async { self.async_send(message).await })
         }
     }
 }
+
 #[cfg(feature = "bp")]
 pub use bp_socket::BpSendingSocket;
 
@@ -254,12 +289,14 @@ impl DefaultSocketController {
                 Ok((n, _)) => {
                     let text = String::from_utf8_lossy(&buf[..n]).to_string();
                     let sender = { controller_arc.lock().unwrap().local_peer.clone().unwrap() };
+                    println!("UDP: received {} bytes, content: \"{}\"", n, text);
                     controller_arc
                         .lock()
                         .unwrap()
                         .notify_observers(&text, sender);
                 }
-                Err(_) => {
+                Err(e) => {
+                    eprintln!("UDP: receiving error {:?}", e);
                     sleep(Duration::from_secs(1)).await;
                     continue;
                 }
@@ -273,21 +310,30 @@ impl DefaultSocketController {
     ) {
         loop {
             match listener.accept().await {
-                Ok((mut stream, _)) => {
+                Ok((mut stream, addr)) => {
+                    println!("TCP: accepted connection from {}", addr);
                     let mut buf = [0u8; 1024];
-                    if let Ok(n) = stream.read(&mut buf).await {
-                        if n > 0 {
+                    match stream.read(&mut buf).await {
+                        Ok(n) if n > 0 => {
                             let text = String::from_utf8_lossy(&buf[..n]).to_string();
                             let sender =
                                 { controller_arc.lock().unwrap().local_peer.clone().unwrap() };
+                            println!("TCP: received {} bytes, content: \"{}\"", n, text);
                             controller_arc
                                 .lock()
                                 .unwrap()
                                 .notify_observers(&text, sender);
                         }
+                        Ok(_) => {
+                            println!("TCP: zero bytes read from {}, closing", addr);
+                        }
+                        Err(e) => {
+                            eprintln!("TCP: read error {:?} from {}", e, addr);
+                        }
                     }
                 }
-                Err(_) => {
+                Err(e) => {
+                    eprintln!("TCP: accept error {:?}", e);
                     sleep(Duration::from_secs(1)).await;
                     continue;
                 }

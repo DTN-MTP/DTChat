@@ -48,40 +48,27 @@ impl ChatModel {
 
     pub fn add_message(&mut self, msg: Message) {
         self.messages.push(msg.clone());
+        self.sort_messages_internally();
         self.notify_observers(AppEvent::MessageReceived(msg));
     }
 
-    pub fn send_message(&mut self, panel: &mut MessagePanel) {
-        let forging_sender = &panel.forging_sender;
-        let protocol = forging_sender.lock().unwrap().protocol.clone();
-        let endpoint = forging_sender.lock().unwrap().endpoint.clone();
-        let text = panel.message_to_send.clone();
+    pub fn send_message(&mut self, msg: &mut Message) -> Result<(), String> {
+        let protocol = msg.sender.lock().unwrap().protocol.clone();
+        let endpoint = msg.sender.lock().unwrap().endpoint.clone();
         let socket = match protocol.as_str() {
             "tcp" => create_sending_socket(ProtocolType::Tcp, &endpoint),
             #[cfg(feature = "bp")]
             "bp" => create_sending_socket(ProtocolType::Bp, &endpoint),
             _ => create_sending_socket(ProtocolType::Udp, &endpoint),
         };
-        let msg = if let Err(e) = socket.and_then(|mut s| s.send(&text)) {
-            Message {
-                uuid: "ERR".to_string(),
-                response: None,
-                sender: Arc::clone(forging_sender),
-                text: format!("Socket error: {:?}", e),
-                shipment_status: MessageStatus::Sent(String::new()),
-            }
-        } else {
-            Message {
-                uuid: "TODO".to_string(),
-                response: None,
-                sender: Arc::clone(forging_sender),
-                text,
-                shipment_status: MessageStatus::Sent(Local::now().format("%H:%M:%S").to_string()),
-            }
-        };
-        self.add_message(msg.clone());
-        self.notify_observers(AppEvent::MessageSent(msg));
-        panel.message_to_send.clear();
+        if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
+            eprintln!("Failed to send via TCP/UDP: {:?}", e);
+            return Err(format!("{:?}", e));
+        }
+        msg.uuid = "SENT".to_string();
+        msg.shipment_status = MessageStatus::Sent(Local::now().format("%H:%M:%S").to_string());
+        self.notify_observers(AppEvent::MessageSent(msg.clone()));
+        Ok(())
     }
 
     pub fn receive_message(&mut self, text: &str, sender: SharedPeer) {
@@ -94,6 +81,20 @@ impl ChatModel {
             shipment_status: MessageStatus::Received(now.clone(), now),
         };
         self.add_message(msg);
+    }
+
+    fn sort_messages_internally(&mut self) {
+        self.messages.sort_by(|a, b| {
+            let (tx_a, rx_a) = match &a.shipment_status {
+                MessageStatus::Sent(tx) => (tx, tx),
+                MessageStatus::Received(tx, rx) => (tx, rx),
+            };
+            let (tx_b, rx_b) = match &b.shipment_status {
+                MessageStatus::Sent(tx) => (tx, tx),
+                MessageStatus::Received(tx, rx) => (tx, rx),
+            };
+            tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
+        });
     }
 
     pub fn sort_messages(&mut self, ctx_peer_uuid: &str) {
@@ -168,16 +169,6 @@ pub struct ChatApp {
     pub socket_controller: Arc<Mutex<dyn SocketController + Send + Sync>>,
 }
 
-impl ChatApp {
-    pub fn process_send_message(&mut self) {
-        {
-            let mut model = self.model.lock().unwrap();
-            model.send_message(&mut self.message_panel);
-        }
-        self.sort_messages();
-    }
-}
-
 impl Default for ChatApp {
     fn default() -> Self {
         let config = AppConfigManager::load_yaml_from_file("database.yaml");
@@ -242,8 +233,11 @@ impl ChatApp {
             .unwrap()
             .uuid
             .clone();
-        self.model.lock().unwrap().sort_messages(&ctx_peer_uuid);
-        let sorted = self.model.lock().unwrap().messages.clone();
+        let sorted = {
+            let mut model = self.model.lock().unwrap();
+            model.sort_messages(&ctx_peer_uuid);
+            model.messages.clone()
+        };
         self.message_panel.messages = sorted;
     }
 }
