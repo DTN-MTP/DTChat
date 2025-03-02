@@ -1,7 +1,7 @@
 use crate::app::ChatApp;
 use eframe::egui;
 use egui::{Align, ComboBox, Layout};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::actions::create_room::CreateRoomForm;
 
@@ -24,11 +24,13 @@ impl MessageSettingsBar {
     pub fn new() -> Self {
         Self {}
     }
+
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                let default_room_selected = app.message_panel.rooms[0].borrow().name.clone();
+                let locked_model = app.model_arc.lock().unwrap();
+                let default_room_selected = locked_model.rooms[0].clone();
 
                 ui.label("View:");
                 ComboBox::from_id_salt("message_view")
@@ -52,17 +54,19 @@ impl MessageSettingsBar {
                     });
 
                 ui.label("Room:");
-                // !TODO: Implement room selection
                 ComboBox::from_id_salt("room_list")
-                    .selected_text(default_room_selected)
+                    .selected_text(default_room_selected.name)
                     .show_ui(ui, |ui| {
-                        for room_rc in &app.message_panel.rooms {
-                            let is_selected = Rc::ptr_eq(&app.message_panel.rooms[0], room_rc);
+                        for room_arc in &locked_model.rooms {
+                            let room_name = room_arc.name.clone();
                             if ui
-                                .selectable_label(is_selected, room_rc.borrow().name.clone())
+                                .selectable_label(
+                                    room_arc.uuid == default_room_selected.uuid,
+                                    room_name,
+                                )
                                 .clicked()
                             {
-                                // app.message_panel.rooms = vec![Rc::clone(room_rc)];
+                                // app.message_panel.rooms.swap(0, i);
                             }
                         }
                     });

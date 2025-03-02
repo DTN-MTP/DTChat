@@ -1,7 +1,7 @@
 use crate::app::ChatApp;
 use eframe::egui;
 use egui::{ComboBox, TextEdit};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct MessageForge {}
 
@@ -11,23 +11,22 @@ impl MessageForge {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
+        let locked_model = app.model_arc.lock().unwrap();
+
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            ui.label("Sender:");
-
-            let current_sender_name = app.message_panel.forging_sender.borrow().name.clone();
+            ui.label("Send to:");
+            let forging_receiver = app.message_panel.forging_receiver.clone();
 
             ComboBox::from_id_salt("Peer")
-                .selected_text(current_sender_name)
+                .selected_text(forging_receiver.name.clone())
                 .show_ui(ui, |ui| {
-                    for peer_rc in &app.peers {
-                        let is_selected = Rc::ptr_eq(&app.message_panel.forging_sender, peer_rc);
-                        // Use selectable_label and manually handle selection
+                    for peer in &locked_model.peers {
                         if ui
-                            .selectable_label(is_selected, peer_rc.borrow().name.clone())
+                            .selectable_label(forging_receiver.uuid == peer.uuid, peer.name.clone())
                             .clicked()
                         {
-                            app.message_panel.forging_sender = Rc::clone(peer_rc);
+                            app.message_panel.forging_receiver = peer.clone();
                         }
                     }
                 });

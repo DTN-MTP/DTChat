@@ -1,12 +1,15 @@
 use serde::Deserialize;
-use std::{cell::RefCell, fs, rc::Rc};
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+};
 
 fn default_protocol() -> String {
     "udp".to_string()
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-pub struct PeerAttributes {
+pub struct Peer {
     pub uuid: String,
     pub name: String,
     pub endpoint: String,
@@ -15,51 +18,35 @@ pub struct PeerAttributes {
     pub protocol: String,
 }
 
-impl PeerAttributes {
+impl Peer {
     pub fn get_color(&self) -> egui::Color32 {
-        let color_id = self.color % 3;
+        let color_id = self.color % 4;
         match color_id {
             0 => egui::Color32::GREEN,
             1 => egui::Color32::RED,
             2 => egui::Color32::BLUE,
+            3 => egui::Color32::YELLOW,
             _ => egui::Color32::WHITE,
         }
     }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-pub struct RoomAttributes {
+pub struct Room {
+    pub uuid: String,
     pub name: String,
 }
 
-/// New type alias `SharedPeer` to refer to `Peer` via Rc<RefCell<_>>
-/// Facilitate shared ownership and mutable access to `Peer` instances across various modules
-pub type SharedPeer = Rc<RefCell<PeerAttributes>>;
-pub type SharedRoom = Rc<RefCell<RoomAttributes>>;
-
 #[derive(Debug, Deserialize)]
 pub struct AppConfigManager {
-    pub peer_list: Vec<PeerAttributes>,
-    pub room_list: Vec<RoomAttributes>,
+    pub peer_list: Vec<Peer>,
+    pub local_peer: Peer,
+    pub room_list: Vec<Room>,
 }
 
 impl AppConfigManager {
     pub fn load_yaml_from_file(file_path: &str) -> Self {
         let config_str = fs::read_to_string(file_path).expect("Failed to read config file");
         serde_yaml::from_str(&config_str).expect("Failed to parse YAML")
-    }
-
-    pub fn shared_peers(&self) -> Vec<SharedPeer> {
-        self.peer_list
-            .iter()
-            .map(|peer| Rc::new(RefCell::new(peer.clone())))
-            .collect()
-    }
-
-    pub fn shared_rooms(&self) -> Vec<SharedRoom> {
-        self.room_list
-            .iter()
-            .map(|room| Rc::new(RefCell::new(room.clone())))
-            .collect()
     }
 }

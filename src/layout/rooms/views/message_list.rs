@@ -1,6 +1,6 @@
-use crate::app::ChatApp;
+use crate::app::{ChatApp, ChatModel, SortStrategy};
 use egui::ComboBox;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub struct MessageListView {}
 
@@ -10,6 +10,20 @@ impl MessageListView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
+        app.handler_arc
+            .lock()
+            .unwrap()
+            .events
+            .retain(|event| match event {
+                crate::app::AppEvent::MessageReceived(_message) => {
+                    app.message_panel.send_status = Some("Message received".to_string());
+                    false
+                }
+                _ => true,
+            });
+
+        let mut locked_model = app.model_arc.lock().unwrap();
+        let sort_for_peer = locked_model.localpeer.clone();
         let mut call_sort = false;
 
         egui::ScrollArea::vertical()
@@ -18,39 +32,36 @@ impl MessageListView {
                 ui.horizontal(|ui| {
                     ui.label("See view from:");
 
-                    let current_view_from = app.message_panel.show_view_from.borrow().name.clone();
-
                     ComboBox::from_id_salt("Peer")
-                        .selected_text(current_view_from)
+                        .selected_text(sort_for_peer.name.clone())
                         .show_ui(ui, |ui| {
-                            for peer_rc in &app.peers {
-                                let is_selected =
-                                    Rc::ptr_eq(&app.message_panel.show_view_from, peer_rc);
-                                // Use selectable_label and manually handle selection
+                            for peer in &locked_model.peers {
                                 if ui
-                                    .selectable_label(is_selected, peer_rc.borrow().name.clone())
+                                    .selectable_label(
+                                        peer.uuid == sort_for_peer.uuid,
+                                        peer.name.clone(),
+                                    )
                                     .clicked()
                                 {
-                                    app.message_panel.show_view_from = Rc::clone(peer_rc);
                                     call_sort = true;
                                 }
                             }
                         });
                 });
-
                 if call_sort {
-                    app.sort_messages();
+                    locked_model.sort_messages(SortStrategy::Relative(sort_for_peer.uuid));
                 }
 
-                for message in &app.message_panel.messages {
+                for message in &locked_model.messages {
                     ui.horizontal(|ui| {
+                        let color = message.sender.get_color();
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}: {}",
                                 message.get_shipment_status_str(),
                                 message.text
                             ))
-                            .color(message.sender.borrow().get_color()),
+                            .color(color),
                         );
                     });
                 }

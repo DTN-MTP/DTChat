@@ -1,4 +1,13 @@
 # DB: not meant for manual modification
+
+local_peer:
+  uuid: 3
+  name: local peer
+  endpoint: "127.0.0.1:7001"
+  protocol: tcp
+  color: 3
+
+
 peer_list:
   - uuid: 0
     name: john doe
@@ -17,6 +26,12 @@ peer_list:
     endpoint: "127.0.0.1:9990"
     protocol: tcp
     color: 2
+
+  - uuid: 3
+    name: local peer
+    endpoint: "127.0.0.1:7000"
+    protocol: udp
+    color: 3
 
 room_list:
   - uuid: 0
