@@ -1,6 +1,6 @@
-use crate::app::ChatApp;
+use crate::app::{ChatApp, ChatModel, SortStrategy};
 use egui::ComboBox;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct MessageListView {}
 
@@ -10,45 +10,51 @@ impl MessageListView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
-        let mut call_sort = None;
+        app.handler_arc
+            .lock()
+            .unwrap()
+            .events
+            .retain(|event| match event {
+                crate::app::AppEvent::MessageReceived(_message) => {
+                    app.message_panel.send_status = Some("Message received".to_string());
+                    false
+                }
+                _ => true,
+            });
+
+        let mut locked_model = app.model_arc.lock().unwrap();
+        let sort_for_peer = locked_model.localpeer.clone();
+        let mut call_sort = false;
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("See view from:");
-                    let show_view = app.message_panel.show_view_from.lock().unwrap();
-                    let current_view_from = show_view.name.clone();
-                    drop(show_view);
 
                     ComboBox::from_id_salt("Peer")
-                        .selected_text(current_view_from)
+                        .selected_text(sort_for_peer.name.clone())
                         .show_ui(ui, |ui| {
-                            for peer_arc in &app.peers {
-                                let peer_lock = peer_arc.lock().unwrap();
-                                let is_selected =
-                                    Arc::ptr_eq(&app.message_panel.show_view_from, peer_arc);
-                                let peer_name = peer_lock.name.clone();
-                                drop(peer_lock);
-
-                                if ui.selectable_label(is_selected, peer_name).clicked() {
-                                    app.message_panel.show_view_from = Arc::clone(peer_arc);
-                                    call_sort = Some(peer_arc.lock().as_ref().unwrap().name.clone());
+                            for peer in &locked_model.peers {
+                                if ui
+                                    .selectable_label(
+                                        peer.uuid == sort_for_peer.uuid,
+                                        peer.name.clone(),
+                                    )
+                                    .clicked()
+                                {
+                                    call_sort = true;
                                 }
                             }
                         });
                 });
-
-                if let Some(peer_name) = call_sort {
-                    app.sort_messages(peer_name);
+                if call_sort {
+                    locked_model.sort_messages(SortStrategy::Relative(sort_for_peer.uuid));
                 }
 
-                for message in &app.model.lock().unwrap().messages {
+                for message in &locked_model.messages {
                     ui.horizontal(|ui| {
-                        let sender_lock = message.sender.lock().unwrap();
-                        let color = sender_lock.get_color();
-                        drop(sender_lock);
-
+                        let color = message.sender.get_color();
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}: {}",

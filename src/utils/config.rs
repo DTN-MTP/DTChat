@@ -9,7 +9,7 @@ fn default_protocol() -> String {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-pub struct PeerAttributes {
+pub struct Peer {
     pub uuid: String,
     pub name: String,
     pub endpoint: String,
@@ -18,7 +18,7 @@ pub struct PeerAttributes {
     pub protocol: String,
 }
 
-impl PeerAttributes {
+impl Peer {
     pub fn get_color(&self) -> egui::Color32 {
         let color_id = self.color % 4;
         match color_id {
@@ -32,36 +32,21 @@ impl PeerAttributes {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-pub struct RoomAttributes {
+pub struct Room {
+    pub uuid: String,
     pub name: String,
 }
 
-pub type SharedPeer = Arc<Mutex<PeerAttributes>>;
-pub type SharedRoom = Arc<Mutex<RoomAttributes>>;
-
 #[derive(Debug, Deserialize)]
 pub struct AppConfigManager {
-    pub peer_list: Vec<PeerAttributes>,
-    pub room_list: Vec<RoomAttributes>,
+    pub peer_list: Vec<Peer>,
+    pub local_peer: Peer,
+    pub room_list: Vec<Room>,
 }
 
 impl AppConfigManager {
     pub fn load_yaml_from_file(file_path: &str) -> Self {
         let config_str = fs::read_to_string(file_path).expect("Failed to read config file");
         serde_yaml::from_str(&config_str).expect("Failed to parse YAML")
-    }
-
-    pub fn shared_peers(&self) -> Vec<SharedPeer> {
-        self.peer_list
-            .iter()
-            .map(|p| Arc::new(Mutex::new(p.clone())))
-            .collect()
-    }
-
-    pub fn shared_rooms(&self) -> Vec<SharedRoom> {
-        self.room_list
-            .iter()
-            .map(|r| Arc::new(Mutex::new(r.clone())))
-            .collect()
     }
 }

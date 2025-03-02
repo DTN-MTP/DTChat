@@ -29,7 +29,8 @@ impl MessageSettingsBar {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                let default_room_selected = app.message_panel.rooms[0].lock().unwrap().name.clone();
+                let locked_model = app.model_arc.lock().unwrap();
+                let default_room_selected = locked_model.rooms[0].clone();
 
                 ui.label("View:");
                 ComboBox::from_id_salt("message_view")
@@ -54,12 +55,17 @@ impl MessageSettingsBar {
 
                 ui.label("Room:");
                 ComboBox::from_id_salt("room_list")
-                    .selected_text(default_room_selected)
+                    .selected_text(default_room_selected.name)
                     .show_ui(ui, |ui| {
-                        for (i, room_arc) in app.message_panel.rooms.iter().enumerate() {
-                            let room_name = room_arc.lock().unwrap().name.clone();
-                            let is_selected = Arc::ptr_eq(&app.message_panel.rooms[0], room_arc);
-                            if ui.selectable_label(is_selected, room_name).clicked() {
+                        for room_arc in &locked_model.rooms {
+                            let room_name = room_arc.name.clone();
+                            if ui
+                                .selectable_label(
+                                    room_arc.uuid == default_room_selected.uuid,
+                                    room_name,
+                                )
+                                .clicked()
+                            {
                                 // app.message_panel.rooms.swap(0, i);
                             }
                         }

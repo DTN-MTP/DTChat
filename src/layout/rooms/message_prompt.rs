@@ -13,6 +13,22 @@ impl MessagePrompt {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
+        app.handler_arc
+            .lock()
+            .unwrap()
+            .events
+            .retain(|event| match event {
+                crate::app::AppEvent::SendFailed(_message) => {
+                    app.message_panel.send_status = Some("Failed to send message.".to_string());
+                    false
+                }
+                crate::app::AppEvent::MessageSent(_message) => {
+                    app.message_panel.send_status = Some("Message Sent.".to_string());
+                    false
+                }
+                _ => true,
+            });
+
         ui.add_space(4.0);
         let mut send_message = false;
         ui.horizontal(|ui| {
@@ -36,24 +52,14 @@ impl MessagePrompt {
             }
         });
         if send_message && !app.message_panel.message_to_send.trim().is_empty() {
-            if app.message_panel.forging_sender.lock().unwrap().name == "local peer" {
+            let forging_receiver = app.message_panel.forging_receiver.clone();
+            if forging_receiver.name == "local peer" {
                 app.message_panel.send_status =
-                    Some("Cannot send message using local peer".to_string());
+                    Some("Cannot send message to local peer".to_string());
             } else {
                 let text = app.message_panel.message_to_send.clone();
-                let forging_sender = app.message_panel.forging_sender.clone();
-                let mut new_msg = Message {
-                    uuid: "NEW".to_string(),
-                    response: None,
-                    sender: forging_sender,
-                    text,
-                    shipment_status: MessageStatus::Sent(
-                        Local::now().format("%H:%M:%S").to_string(),
-                    ),
-                };
-
-                let mut model = app.model.lock().unwrap();
-                model.send_message(&mut new_msg);
+                let mut model = app.model_arc.lock().unwrap();
+                model.send_message(&text, forging_receiver.clone());
                 app.message_panel.message_to_send.clear();
             }
         }

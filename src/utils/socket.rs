@@ -1,4 +1,4 @@
-use crate::utils::config::SharedPeer;
+use crate::utils::config::Peer;
 use once_cell::sync::Lazy;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::Error as IoError;
@@ -249,7 +249,7 @@ pub async fn start_tcp_listener(address: &str) -> Result<TcpListener, SocketErro
 }
 
 pub trait SocketObserver: Send + Sync {
-    fn on_socket_event(&self, text: &str, sender: SharedPeer);
+    fn on_socket_event(&self, text: &str, sender: Peer);
 }
 
 pub trait SocketController: Send + Sync {
@@ -258,7 +258,7 @@ pub trait SocketController: Send + Sync {
 
 pub struct DefaultSocketController {
     observers: Vec<Arc<dyn SocketObserver + Send + Sync>>,
-    local_peer: Option<SharedPeer>,
+    local_peer: Option<Peer>,
     udp_socket: Option<UdpSocket>,
     tcp_listener: Option<TcpListener>,
 }
@@ -273,9 +273,9 @@ impl DefaultSocketController {
         }
     }
 
-    fn notify_observers(&self, text: &str, sender: SharedPeer) {
+    fn notify_observers(&self, text: &str, sender: Peer) {
         for obs in &self.observers {
-            obs.on_socket_event(text, sender.clone());
+            obs.on_socket_event(text.trim(), sender.clone());
         }
     }
 
@@ -342,7 +342,7 @@ impl DefaultSocketController {
     }
 
     pub fn init_controller(
-        local_peer: SharedPeer,
+        local_peer: Peer,
     ) -> Result<Arc<Mutex<DefaultSocketController>>, SocketError> {
         let udp_socket =
             TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await })?;
