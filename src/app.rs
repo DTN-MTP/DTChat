@@ -6,7 +6,7 @@ use crate::utils::message::{Message, MessageStatus};
 use crate::utils::socket::{
     create_sending_socket, DefaultSocketController, ProtocolType, SocketController, SocketObserver,
 };
-use chrono::{Duration, Local};
+use chrono::{Duration, Local, Utc};
 use eframe::egui;
 use std::clone;
 use std::cmp::Ordering;
@@ -111,7 +111,7 @@ impl ChatModel {
             response: None,
             sender: self.localpeer.clone(),
             text: text.to_string(),
-            shipment_status: MessageStatus::Sent(Local::now().format("%H:%M:%S").to_string()),
+            shipment_status: MessageStatus::Sent(Utc::now()),
         };
 
         let protocol = receiver.protocol.clone();
@@ -133,7 +133,7 @@ impl ChatModel {
     }
 
     pub fn receive_message(&mut self, text: &str, sender: Peer) {
-        let now = Local::now().format("%H:%M:%S").to_string();
+        let now = Utc::now();
         let msg = Message {
             uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
             response: None,
