@@ -6,9 +6,22 @@ use egui::Color32;
 use egui_plot::{AxisHints, BoxElem, BoxPlot, BoxSpread, GridMark, Legend, Plot, VLine};
 pub struct MessageGraphView {}
 
+
+trait AutoReset {
+    fn auto_reset(self, auto: bool) -> Self;
+}
+
+impl <'a> AutoReset for Plot<'a>{
+    fn auto_reset(self, auto: bool) -> Self {
+        if auto{
+           return self.reset()
+        }
+        self
+    }
+}
+
 impl MessageGraphView {
-    const MINS_PER_DAY: f64 = 24.0 * 60.0;
-    const MINS_PER_H: f64 = 60.0;
+
     pub fn new() -> Self {
         Self {}
     }
@@ -17,7 +30,7 @@ impl MessageGraphView {
         let now = Local::now().timestamp() as f64
             + Local::now().timestamp_subsec_millis() as f64 / 1000.0;
 
-        let mut locked_model = app.model_arc.lock().unwrap();
+        let locked_model = app.model_arc.lock().unwrap();
         let mut per_sender = HashMap::new();
 
         for (index, message) in locked_model.messages.iter().enumerate() {
@@ -52,9 +65,7 @@ impl MessageGraphView {
             .formatter(time_formatter)
             .placement(egui_plot::VPlacement::Top)];
 
-
-
-
+        let reset_requested = ui.button("Reset view").clicked();
         Plot::new("Box Plot Demo")
             .legend(Legend::default())
             .allow_zoom(true)
@@ -62,7 +73,7 @@ impl MessageGraphView {
             .custom_x_axes(x_axes)
             .show_x(false)
             .show_y(false) // setting this to try would display the name (message text), maybe use something better
-            .include_x(now)
+            .auto_reset(reset_requested)
             .show(ui, |plot_ui| {
                 plot_ui.vline(VLine::new(now).color(Color32::from_rgb(255, 0, 0)));
 
@@ -76,5 +87,6 @@ impl MessageGraphView {
             });
         let ctx = app.handler_arc.lock().unwrap().ctx.clone();
         ctx.request_repaint();
+
     }
 }
