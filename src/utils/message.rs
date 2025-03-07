@@ -40,8 +40,10 @@ impl Message {
 
     pub fn get_timestamps(&self) -> (f64, f64) {
         match self.shipment_status {
-            MessageStatus::Sent(tx) => (tx.timestamp() as f64, tx.timestamp() as f64),
-            MessageStatus::Received(tx, rx) => (tx.timestamp() as f64, tx.timestamp() as f64),
+            MessageStatus::Sent(tx) => (tx.timestamp_millis() as f64, tx.timestamp_millis() as f64),
+            MessageStatus::Received(tx, rx) => {
+                (tx.timestamp_millis() as f64, tx.timestamp_millis() as f64)
+            }
         }
     }
 }

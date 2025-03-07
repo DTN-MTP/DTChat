@@ -6,29 +6,46 @@ use egui::Color32;
 use egui_plot::{AxisHints, BoxElem, BoxPlot, BoxSpread, GridMark, Legend, Plot, VLine};
 pub struct MessageGraphView {}
 
-
 trait AutoReset {
     fn auto_reset(self, auto: bool) -> Self;
 }
 
-impl <'a> AutoReset for Plot<'a>{
+impl<'a> AutoReset for Plot<'a> {
     fn auto_reset(self, auto: bool) -> Self {
-        if auto{
-           return self.reset()
+        if auto {
+            return self.reset();
         }
         self
     }
 }
 
-impl MessageGraphView {
+pub fn ts_to_str(
+    datetime: &DateTime<Utc>,
+    date: bool,
+    time: bool,
+    separator: Option<String>,
+) -> String {
+    let mut res = "".to_string();
+    if date {
+        res += &datetime.format("%Y-%m-%d").to_string();
+    }
+    if let Some(sep) = separator {
+        res += &sep;
+    }
+    if time {
+        res += &datetime.format("%H:%M:%S").to_string()
+    }
+    return res;
+}
 
+impl MessageGraphView {
     pub fn new() -> Self {
         Self {}
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
-        let now = Local::now().timestamp() as f64
-            + Local::now().timestamp_subsec_millis() as f64 / 1000.0;
+        let now = Local::now().timestamp_millis() as f64;
+        // + Local::now().timestamp_subsec_millis() as f64 / 1000.0;
 
         let locked_model = app.model_arc.lock().unwrap();
         let mut per_sender = HashMap::new();
@@ -43,7 +60,7 @@ impl MessageGraphView {
                 let (tx, mut rx) = message.get_timestamps();
 
                 // TODO : remove that
-                rx = rx + 3.0;
+                rx = rx + 3000.0;
 
                 box_elems.push(
                     BoxElem::new(index as f64, BoxSpread::new(tx + 1.0, tx, tx, rx, rx - 1.0))
@@ -54,10 +71,8 @@ impl MessageGraphView {
 
         let time_formatter = |x: GridMark, _range: &RangeInclusive<f64>| {
             // Convert timestamp to readable datetime
-            let datetime = DateTime::<Utc>::from_timestamp(x.value as i64, 0).unwrap_or(Utc::now());
-            return datetime.format("%Y-%m-%d").to_string()
-                + "\n"
-                + &datetime.format("%H:%M:%S").to_string();
+            let datetime = DateTime::<Utc>::from_timestamp_millis(x.value as i64).unwrap();
+            return ts_to_str(&datetime, true, true, Some("\n".to_string()));
         };
 
         let x_axes = vec![AxisHints::new_x()
@@ -71,22 +86,54 @@ impl MessageGraphView {
             .allow_zoom(true)
             .allow_drag(true)
             .custom_x_axes(x_axes)
-            .show_x(false)
+            .custom_y_axes(vec![])
+            .show_x(true)
             .show_y(false) // setting this to try would display the name (message text), maybe use something better
+            .label_formatter(|name, value| {
+                if !name.is_empty() {
+                    format!("{}: {:.*}%", name, 1, value.y)
+                } else {
+                    let value = DateTime::<Utc>::from_timestamp_millis(value.x as i64).unwrap();
+                    format!("{}", ts_to_str(&value, false, true, None))
+                }
+            })
             .auto_reset(reset_requested)
             .show(ui, |plot_ui| {
                 plot_ui.vline(VLine::new(now).color(Color32::from_rgb(255, 0, 0)));
 
                 for (_uuid, (peer, boxes)) in per_sender {
+                    let peer_name = peer.name.clone();
+
+                    // Create a new String that we can move into the closure
+                    let formatter_peer_name = peer_name.clone();
+
                     let box_for_senders = BoxPlot::new(boxes)
-                        .name(peer.name.clone())
+                        .name(peer_name)
                         .color(peer.get_color())
-                        .horizontal();
+                        .horizontal()
+                        .allow_hover(true)
+                        .element_formatter(Box::new(move |bar, _bar_chart| {
+                            let tx_time =
+                                DateTime::<Utc>::from_timestamp_millis(bar.spread.quartile1 as i64)
+                                    .unwrap();
+                            let rx_time =
+                                DateTime::<Utc>::from_timestamp_millis(bar.spread.quartile3 as i64)
+                                    .unwrap();
+                            let date = tx_time.date_naive() != rx_time.date_naive();
+                            format!(
+                                "Message: {}\nSent by {}\ntx time: {}\nrx_time: {}",
+                                bar.name,
+                                formatter_peer_name,
+                                ts_to_str(&tx_time, date, true, None),
+                                ts_to_str(&rx_time, date, true, None),
+                            )
+                        }));
+
                     plot_ui.box_plot(box_for_senders);
                 }
             });
+
         let ctx = app.handler_arc.lock().unwrap().ctx.clone();
         ctx.request_repaint();
-
     }
 }
