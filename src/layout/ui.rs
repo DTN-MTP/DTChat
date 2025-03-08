@@ -30,9 +30,11 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
                 ui.separator();
                 let mut prompt = MessagePrompt::new();
                 prompt.show(app, ui);
+                ui.separator();
                 if let Some(status) = &app.message_panel.send_status {
-                    ui.separator();
                     ui.label(status);
+                } else {
+                    ui.label("");
                 }
             });
 

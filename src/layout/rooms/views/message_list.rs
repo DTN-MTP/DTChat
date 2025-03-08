@@ -21,22 +21,11 @@ impl MessageListView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
-        app.handler_arc
-            .lock()
-            .unwrap()
-            .events
-            .retain(|event| match event {
-                crate::app::AppEvent::MessageReceived(_message) => {
-                    app.message_panel.send_status = Some("Message received".to_string());
-                    false
-                }
-                _ => true,
-            });
 
         let mut locked_model = app.model_arc.lock().unwrap();
         //let sort_for_peer = locked_model.localpeer.clone();
-        let mut sort_strat = locked_model.sort_strategy.clone();
-        let mut local_peer = locked_model.localpeer.clone();
+        let sort_strat = locked_model.sort_strategy.clone();
+        let local_peer = locked_model.localpeer.clone();
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])

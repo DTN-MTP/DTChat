@@ -26,6 +26,10 @@ impl MessagePrompt {
                     app.message_panel.send_status = Some("Message Sent.".to_string());
                     false
                 }
+                crate::app::AppEvent::MessageReceived(_message) => {
+                    app.message_panel.send_status = Some("Message received".to_string());
+                    false
+                }
                 _ => true,
             });
 
