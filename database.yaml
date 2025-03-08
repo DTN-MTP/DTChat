@@ -27,11 +27,12 @@ peer_list:
     protocol: tcp
     color: 2
 
-  - uuid: 3
-    name: local peer
-    endpoint: "127.0.0.1:7000"
-    protocol: udp
-    color: 3
+  # This is a local peer
+  # - uuid: 3
+  #   name: local peer
+  #   endpoint: "127.0.0.1:7000"
+  #   protocol: udp
+  #   color: 3
 
 room_list:
   - uuid: 0

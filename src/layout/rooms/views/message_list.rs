@@ -1,8 +1,19 @@
-use crate::app::{ChatApp, ChatModel, SortStrategy};
-use egui::ComboBox;
-use std::sync::{Arc, Mutex};
+use crate::app::{ChatApp, SortStrategy};
 
 pub struct MessageListView {}
+
+fn get_str_for_strat(local_peer_uuid: &String, strat: &SortStrategy) -> String {
+    match strat {
+        SortStrategy::Standard => return "Standard".to_string(),
+        SortStrategy::Relative(peer) => {
+            if peer.uuid == *local_peer_uuid {
+                return "Local".to_string();
+            } else {
+                return format!("Relative ({})", peer.name).to_string();
+            }
+        }
+    }
+}
 
 impl MessageListView {
     pub fn new() -> Self {
@@ -23,34 +34,42 @@ impl MessageListView {
             });
 
         let mut locked_model = app.model_arc.lock().unwrap();
-        let sort_for_peer = locked_model.localpeer.clone();
-        let mut call_sort = false;
+        //let sort_for_peer = locked_model.localpeer.clone();
+        let mut sort_strat = locked_model.sort_strategy.clone();
+        let mut local_peer = locked_model.localpeer.clone();
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("See view from:");
+                    ui.label("Message sorting strategy:");
 
-                    ComboBox::from_id_salt("Peer")
-                        .selected_text(sort_for_peer.name.clone())
-                        .show_ui(ui, |ui| {
+                    ui.menu_button(get_str_for_strat(&local_peer.uuid, &sort_strat), |ui| {
+                        if ui.button("Standard").on_hover_text("Sorted by sending times").clicked() {
+                            locked_model.sort_messages(SortStrategy::Standard);
+                            ui.close_menu();
+                        }
+                        if ui.button("Local").on_hover_text("Sorted by receiving time for the local peer and sending times for the other peers").clicked() {
+                            locked_model.sort_messages(SortStrategy::Relative(local_peer));
+                            ui.close_menu();
+                        }
+                        ui.menu_button("Relative", |ui| {
+                            let mut clicked = None;
+
                             for peer in &locked_model.peers {
-                                if ui
-                                    .selectable_label(
-                                        peer.uuid == sort_for_peer.uuid,
-                                        peer.name.clone(),
-                                    )
-                                    .clicked()
-                                {
-                                    call_sort = true;
+                                if ui.button(peer.name.as_str()).on_hover_text(format!("Sorted by receiving time for peer {} and sending times for the other peers", peer.name)).clicked() {
+                                    clicked = Some(peer.clone());
                                 }
-                            }
+                             }
+                             if let Some(peer) = clicked {
+                                locked_model.sort_messages(SortStrategy::Relative(peer.clone()));
+                                ui.close_menu();
+                             }
+
                         });
+
+                    });
                 });
-                if call_sort {
-                    locked_model.sort_messages(SortStrategy::Relative(sort_for_peer.uuid));
-                }
 
                 for message in &locked_model.messages {
                     ui.horizontal(|ui| {

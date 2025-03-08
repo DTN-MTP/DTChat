@@ -2,7 +2,7 @@ use super::{
     menu_bar::NavigationItems,
     rooms::{
         message_settings_bar::{MessageSettingsBar, RoomView},
-        views::message_list::MessageListView,
+        views::{message_graph::MessageGraphView, message_list::MessageListView},
     },
 };
 use crate::app::ChatApp;
@@ -24,19 +24,6 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
                 MessageSettingsBar::new().show(app, ui);
             });
 
-            CentralPanel::default().show(ctx, |ui| match app.message_panel.message_view {
-                RoomView::Table => {
-                    ui.label("Table View");
-                }
-                RoomView::Graph => {
-                    ui.label("Graph View");
-                }
-                RoomView::List => {
-                    let mut message_list = MessageListView::new();
-                    message_list.show(app, ui);
-                }
-            });
-
             TopBottomPanel::bottom("message_inputs_panel").show(ctx, |ui| {
                 let mut forge = MessageForge::new();
                 forge.show(app, ui);
@@ -46,6 +33,20 @@ pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
                 if let Some(status) = &app.message_panel.send_status {
                     ui.separator();
                     ui.label(status);
+                }
+            });
+
+            CentralPanel::default().show(ctx, |ui| match app.message_panel.message_view {
+                RoomView::Table => {
+                    ui.label("Table View");
+                }
+                RoomView::Graph => {
+                    let mut message_graph = MessageGraphView::new();
+                    message_graph.show(app, ui);
+                }
+                RoomView::List => {
+                    let mut message_list = MessageListView::new();
+                    message_list.show(app, ui);
                 }
             });
         }
