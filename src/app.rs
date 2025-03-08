@@ -20,9 +20,10 @@ pub enum AppEvent {
     MessageReceived(Message),
 }
 
+#[derive(PartialEq, Eq, Clone)]
 pub enum SortStrategy {
     Standard,
-    Relative(String),
+    Relative(Peer),
 }
 
 fn standard_cmp(a: &Message, b: &Message) -> Ordering {
@@ -96,9 +97,9 @@ impl ChatModel {
                 .messages
                 .binary_search_by(|msg| standard_cmp(msg, &new_msg))
                 .unwrap_or_else(|i| i),
-            SortStrategy::Relative(ctx_peer_uuid) => self
+            SortStrategy::Relative(peer) => self
                 .messages
-                .binary_search_by(|msg| relative_cmp(msg, &new_msg, ctx_peer_uuid.as_str()))
+                .binary_search_by(|msg| relative_cmp(msg, &new_msg, &peer.uuid.as_str()))
                 .unwrap_or_else(|i| i),
         };
         self.messages.insert(idx, new_msg.clone());
@@ -151,7 +152,7 @@ impl ChatModel {
             SortStrategy::Standard => self.messages.sort_by(|a, b| standard_cmp(a, b)),
             SortStrategy::Relative(for_peer) => self
                 .messages
-                .sort_by(|a, b| relative_cmp(a, b, for_peer.as_str())),
+                .sort_by(|a, b| relative_cmp(a, b, for_peer.uuid.as_str())),
         }
     }
 }
