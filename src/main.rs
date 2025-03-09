@@ -20,11 +20,10 @@ fn main() -> Result<(), eframe::Error> {
     let config = AppConfigManager::load_yaml_from_file("database.yaml");
 
     let shared_peers = config.peer_list;
-     let shared_rooms = config.room_list;
+    let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
 
     let mut now = Utc::now() - Duration::seconds(40);
-
 
     let mut model = ChatModel::new(
         shared_peers.clone(),
@@ -89,9 +88,6 @@ fn main() -> Result<(), eframe::Error> {
         text: "Sorry, I'm a bit late!".to_owned(),
         shipment_status: MessageStatus::Received(now, now + Duration::seconds(12)),
     });
-
-
-
 
     let model_arc = Arc::new(Mutex::new(model));
 
