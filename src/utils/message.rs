@@ -42,7 +42,7 @@ impl Message {
         match self.shipment_status {
             MessageStatus::Sent(tx) => (tx.timestamp_millis() as f64, tx.timestamp_millis() as f64),
             MessageStatus::Received(tx, rx) => {
-                (tx.timestamp_millis() as f64, tx.timestamp_millis() as f64)
+                (tx.timestamp_millis() as f64, rx.timestamp_millis() as f64)
             }
         }
     }

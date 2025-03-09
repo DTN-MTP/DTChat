@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::RangeInclusive};
 
 use crate::app::ChatApp;
 use chrono::{DateTime, Local, Utc};
-use egui::Color32;
+use egui::{Color32, Vec2b};
 use egui_plot::{AxisHints, BoxElem, BoxPlot, BoxSpread, GridMark, Legend, Plot, VLine};
 pub struct MessageGraphView {}
 
@@ -57,10 +57,7 @@ impl MessageGraphView {
             }
 
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
-                let (tx, mut rx) = message.get_timestamps();
-
-                // TODO : remove that
-                rx = rx + 3000.0;
+                let (tx, rx) = message.get_timestamps();
 
                 box_elems.push(
                     BoxElem::new(index as f64, BoxSpread::new(tx + 1.0, tx, tx, rx, rx - 1.0))
@@ -86,7 +83,10 @@ impl MessageGraphView {
             .allow_zoom(true)
             .allow_drag(true)
             .custom_x_axes(x_axes)
+            .include_y((locked_model.messages.len() + 1) as f64)
             .custom_y_axes(vec![])
+            .allow_scroll(Vec2b { x: true, y: false })
+            .allow_drag(Vec2b { x: true, y: false })
             .show_x(true)
             .show_y(false) // setting this to try would display the name (message text), maybe use something better
             .label_formatter(|name, value| {

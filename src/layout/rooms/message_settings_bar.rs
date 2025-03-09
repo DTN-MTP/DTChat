@@ -14,7 +14,7 @@ pub enum RoomView {
 
 impl Default for RoomView {
     fn default() -> Self {
-        Self::List
+        Self::Graph
     }
 }
 

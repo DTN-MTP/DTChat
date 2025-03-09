@@ -4,8 +4,10 @@ mod layout;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
+use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
+    message::{Message, MessageStatus},
     socket::{DefaultSocketController, SocketController, SocketObserver},
 };
 
@@ -18,13 +20,79 @@ fn main() -> Result<(), eframe::Error> {
     let config = AppConfigManager::load_yaml_from_file("database.yaml");
 
     let shared_peers = config.peer_list;
-    let shared_rooms = config.room_list;
+     let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
-    let model = ChatModel::new(
+
+    let mut now = Utc::now() - Duration::seconds(40);
+
+
+    let mut model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),
     );
+
+    model.messages.push(Message {
+        uuid: "1".to_string(),
+        response: None,
+        sender: local_peer.clone(),
+        text: "Hello from local peer".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+    });
+
+    now += Duration::seconds(2);
+
+    model.messages.push(Message {
+        uuid: "1".to_string(),
+        response: None,
+        sender: shared_peers[2].clone(),
+        text: "Bob at your service !".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(30)),
+    });
+
+    now += Duration::seconds(1);
+
+    model.messages.push(Message {
+        uuid: "2".to_string(),
+        response: None,
+        sender: shared_peers[0].clone(),
+        text: "Hello local peer, how are you?".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+    });
+
+    now += Duration::seconds(2);
+
+    model.messages.push(Message {
+        uuid: "3".to_string(),
+        response: None,
+        sender: shared_peers[0].clone(),
+        text: "I'm john does".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+    });
+
+    now += Duration::seconds(13);
+
+    model.messages.push(Message {
+        uuid: "4".to_string(),
+        response: None,
+        sender: local_peer.clone(),
+        text: "Hello john doe, Some news from alice ?".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+    });
+
+    now += Duration::seconds(5);
+
+    model.messages.push(Message {
+        uuid: "1".to_string(),
+        response: None,
+        sender: shared_peers[1].clone(),
+        text: "Sorry, I'm a bit late!".to_owned(),
+        shipment_status: MessageStatus::Received(now, now + Duration::seconds(12)),
+    });
+
+
+
+
     let model_arc = Arc::new(Mutex::new(model));
 
     let socket_controller = DefaultSocketController::init_controller(local_peer.clone()).unwrap();
