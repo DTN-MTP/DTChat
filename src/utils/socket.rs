@@ -1,5 +1,6 @@
 use crate::utils::config::Peer;
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::Error as IoError;
 use std::net::SocketAddr;
@@ -47,6 +48,8 @@ impl From<std::net::AddrParseError> for SocketError {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum ProtocolType {
     Udp,
     Tcp,
@@ -83,13 +86,13 @@ impl UdpSendingSocket {
 impl SendingSocket for UdpSendingSocket {
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async {
-            maybe_delay().await;
-            println!(
-                "UDP: sending {} bytes to {}, content: \"{}\"",
-                message.len(),
-                self.addr,
-                message
-            );
+            // maybe_delay().await;
+            // println!(
+            //     "UDP: sending {} bytes to {}, content: \"{}\"",
+            //     message.len(),
+            //     self.addr,
+            //     message
+            // );
 
             let bytes_sent = self.socket.send_to(message.as_bytes(), &self.addr).await?;
             println!(
@@ -116,18 +119,17 @@ impl TcpSendingSocket {
 impl SendingSocket for TcpSendingSocket {
     fn send(&mut self, message: &str) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async {
-            let stream = TcpStream::connect(self.addr).await.map_err(|e| {
-                eprintln!("TCP: failed to connect to {}: {:?}", self.addr, e);
+            let mut stream = TcpStream::connect(self.addr).await.map_err(|e| {
+                println!("TCP: failed to connect to {}: {:?}", self.addr, e);
                 SocketError::Io(e)
             })?;
 
-            let mut stream = stream;
-            maybe_delay().await;
-            println!(
-                "TCP: sending {} bytes to remote, content: \"{}\"",
-                message.len(),
-                message
-            );
+            // maybe_delay().await;
+            // println!(
+            //     "TCP: sending {} bytes to remote, content: \"{}\"",
+            //     message.len(),
+            //     message
+            // );
 
             stream.write_all(message.as_bytes()).await?;
             stream.shutdown().await?;
@@ -165,22 +167,19 @@ mod bp_socket {
     impl SendingSocket for BpSendingSocket {
         fn send(&mut self, message: &str) -> Result<usize, SocketError> {
             TOKIO_RUNTIME.block_on(async {
-                maybe_delay().await;
-                println!(
-                    "(BP) Stub sending '{}' ({} bytes) to '{}'",
-                    message,
-                    message.len(),
-                    self.addr
-                );
+                // maybe_delay().await;
+                // println!(
+                //     "(BP) Stub sending '{}' ({} bytes) to '{}'",
+                //     message,
+                //     message.len(),
+                //     self.addr
+                // );
 
                 Ok(message.len())
             })
         }
     }
 }
-
-#[cfg(feature = "bp")]
-pub use bp_socket::BpSendingSocket;
 
 pub fn create_sending_socket(
     protocol: ProtocolType,
@@ -194,12 +193,7 @@ pub fn create_sending_socket(
         ProtocolType::Tcp => {
             let socket = TOKIO_RUNTIME.block_on(async { TcpSendingSocket::new(address).await })?;
             Ok(Box::new(socket))
-        }
-        #[cfg(feature = "bp")]
-        ProtocolType::Bp => {
-            let socket = TOKIO_RUNTIME.block_on(async { BpSendingSocket::new(address).await })?;
-            Ok(Box::new(socket))
-        }
+        } // todo: bp
     }
 }
 
@@ -280,7 +274,7 @@ impl DefaultSocketController {
                     });
                 }
                 Err(e) => {
-                    eprintln!("UDP: receiving error {:?}", e);
+                    println!("UDP: receiving error {:?}", e);
                     sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -322,12 +316,12 @@ impl DefaultSocketController {
                             println!("TCP: zero bytes read from {}, closing", addr);
                         }
                         Err(e) => {
-                            eprintln!("TCP: read error {:?} from {}", e, addr);
+                            println!("TCP: read error {:?} from {}", e, addr);
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("TCP: accept error {:?}", e);
+                    println!("TCP: accept error {:?}", e);
                     sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -337,15 +331,31 @@ impl DefaultSocketController {
     pub fn init_controller(
         local_peer: Peer,
     ) -> Result<Arc<Mutex<DefaultSocketController>>, SocketError> {
-        let udp_socket =
-            TOKIO_RUNTIME.block_on(async { start_udp_listener("127.0.0.1:7000").await })?;
-        let tcp_listener =
-            TOKIO_RUNTIME.block_on(async { start_tcp_listener("127.0.0.1:7001").await })?;
+        let mut udp_socket = None;
+        let mut tcp_listener = None;
+        // todo : bp
+
+        for endpoint in &local_peer.endpoints {
+            match endpoint.protocol {
+                ProtocolType::Udp => {
+                    udp_socket = Some(
+                        TOKIO_RUNTIME
+                            .block_on(async { start_udp_listener(&endpoint.address).await })?,
+                    )
+                }
+                ProtocolType::Tcp => {
+                    tcp_listener = Some(
+                        TOKIO_RUNTIME
+                            .block_on(async { start_tcp_listener(&endpoint.address).await })?,
+                    )
+                } // todo : bp
+            }
+        }
 
         let mut controller = Self::new();
         controller.local_peer = Some(local_peer);
-        controller.udp_socket = Some(udp_socket);
-        controller.tcp_listener = Some(tcp_listener);
+        controller.udp_socket = udp_socket;
+        controller.tcp_listener = tcp_listener;
 
         let controller_arc = Arc::new(Mutex::new(controller));
 
@@ -360,6 +370,8 @@ impl DefaultSocketController {
             let listener = arc_clone.lock().unwrap().tcp_listener.take().unwrap();
             DefaultSocketController::run_tcp_listener(arc_clone, listener).await;
         });
+
+        // todo : bp
 
         Ok(controller_arc)
     }
