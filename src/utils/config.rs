@@ -4,18 +4,20 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-fn default_protocol() -> String {
-    "udp".to_string()
+use super::socket::ProtocolType;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct Endpoint {
+    pub address: String,
+    pub protocol: ProtocolType,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Peer {
     pub uuid: String,
     pub name: String,
-    pub endpoint: String,
+    pub endpoints: Vec<Endpoint>,
     pub color: u32,
-    #[serde(default = "default_protocol")]
-    pub protocol: String,
 }
 
 impl Peer {
