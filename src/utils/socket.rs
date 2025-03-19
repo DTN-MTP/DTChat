@@ -193,7 +193,12 @@ pub fn create_sending_socket(
         ProtocolType::Tcp => {
             let socket = TOKIO_RUNTIME.block_on(async { TcpSendingSocket::new(address).await })?;
             Ok(Box::new(socket))
-        } // todo: bp
+        }
+        #[cfg(feature = "bp")]
+        ProtocolType::Bp => {
+            let socket = TOKIO_RUNTIME.block_on(async { BpSendingSocket::new(address).await })?;
+            Ok(Box::new(socket))
+        }
     }
 }
 
