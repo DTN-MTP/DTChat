@@ -49,14 +49,24 @@ impl From<std::net::AddrParseError> for SocketError {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum ProtocolType {
-    Udp,
-    Tcp,
+#[serde(tag = "type", content = "address")] // Internally tagged enum
+pub enum Endpoint {
+    Udp(String),
+    Tcp(String),
     #[cfg(feature = "bp")]
-    Bp,
+    Bp(String),
 }
 
+impl Endpoint {
+    pub fn to_string(&self) -> String {
+        match self {
+            Endpoint::Udp(s) => s.clone(),
+            Endpoint::Tcp(s) => s.clone(),
+            #[cfg(feature = "bp")]
+            Endpoint::Bp(s) => s.clone(),
+        }
+    }
+}
 pub trait SendingSocket: Send + Sync {
     fn send(&mut self, message: &str) -> Result<usize, SocketError>;
 }
@@ -182,21 +192,24 @@ mod bp_socket {
 }
 
 pub fn create_sending_socket(
-    protocol: ProtocolType,
+    protocol: Endpoint,
     address: &str,
 ) -> Result<Box<dyn SendingSocket>, SocketError> {
     match protocol {
-        ProtocolType::Udp => {
-            let socket = TOKIO_RUNTIME.block_on(async { UdpSendingSocket::new(address).await })?;
+        Endpoint::Udp(address) => {
+            let socket =
+                TOKIO_RUNTIME.block_on(async { UdpSendingSocket::new(address.as_str()).await })?;
             Ok(Box::new(socket))
         }
-        ProtocolType::Tcp => {
-            let socket = TOKIO_RUNTIME.block_on(async { TcpSendingSocket::new(address).await })?;
+        Endpoint::Tcp(address) => {
+            let socket =
+                TOKIO_RUNTIME.block_on(async { TcpSendingSocket::new(address.as_str()).await })?;
             Ok(Box::new(socket))
         }
         #[cfg(feature = "bp")]
-        ProtocolType::Bp => {
-            let socket = TOKIO_RUNTIME.block_on(async { BpSendingSocket::new(address).await })?;
+        Endpoint::Bp(address) => {
+            let socket =
+                TOKIO_RUNTIME.block_on(async { BpSendingSocket::new(address.as_str()).await })?;
             Ok(Box::new(socket))
         }
     }
@@ -341,18 +354,14 @@ impl DefaultSocketController {
         // todo : bp
 
         for endpoint in &local_peer.endpoints {
-            match endpoint.protocol {
-                ProtocolType::Udp => {
-                    udp_socket = Some(
-                        TOKIO_RUNTIME
-                            .block_on(async { start_udp_listener(&endpoint.address).await })?,
-                    )
+            match endpoint {
+                Endpoint::Udp(addr) => {
+                    udp_socket =
+                        Some(TOKIO_RUNTIME.block_on(async { start_udp_listener(&addr).await })?)
                 }
-                ProtocolType::Tcp => {
-                    tcp_listener = Some(
-                        TOKIO_RUNTIME
-                            .block_on(async { start_tcp_listener(&endpoint.address).await })?,
-                    )
+                Endpoint::Tcp(addr) => {
+                    tcp_listener =
+                        Some(TOKIO_RUNTIME.block_on(async { start_tcp_listener(&addr).await })?)
                 } // todo : bp
             }
         }

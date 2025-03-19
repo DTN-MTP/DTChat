@@ -4,7 +4,7 @@ use crate::layout::ui::{self, display};
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{Message, MessageStatus};
 use crate::utils::socket::{
-    create_sending_socket, DefaultSocketController, ProtocolType, SocketController, SocketObserver,
+    create_sending_socket, DefaultSocketController, Endpoint, SocketController, SocketObserver,
 };
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
@@ -115,9 +115,10 @@ impl ChatModel {
         };
 
         // todo, proto/endpoint choices
-        let protocol = receiver.endpoints[0].protocol.clone();
-        let endpoint = receiver.endpoints[0].address.clone();
-        let socket = create_sending_socket(protocol, &endpoint);
+        let protocol = receiver.endpoints[0].clone();
+        let addr = protocol.to_string();
+
+        let socket = create_sending_socket(protocol, &addr);
 
         if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
             eprintln!("Failed to send via TCP/UDP: {:?}", e);

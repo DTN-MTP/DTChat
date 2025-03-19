@@ -4,13 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use super::socket::ProtocolType;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct Endpoint {
-    pub address: String,
-    pub protocol: ProtocolType,
-}
+use super::socket::Endpoint;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Peer {
