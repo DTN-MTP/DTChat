@@ -114,14 +114,11 @@ impl ChatModel {
             shipment_status: MessageStatus::Sent(Utc::now()),
         };
 
-        let protocol = receiver.protocol.clone();
-        let endpoint = receiver.endpoint.clone();
-        let socket = match protocol.as_str() {
-            "tcp" => create_sending_socket(ProtocolType::Tcp, &endpoint),
-            #[cfg(feature = "bp")]
-            "bp" => create_sending_socket(ProtocolType::Bp, &endpoint),
-            _ => create_sending_socket(ProtocolType::Udp, &endpoint),
-        };
+        // todo, proto/endpoint choices
+        let protocol = receiver.endpoints[0].protocol.clone();
+        let endpoint = receiver.endpoints[0].address.clone();
+        let socket = create_sending_socket(protocol, &endpoint);
+
         if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
             eprintln!("Failed to send via TCP/UDP: {:?}", e);
             self.notify_observers(AppEvent::SendFailed(msg.clone()));

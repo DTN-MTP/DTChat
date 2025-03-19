@@ -3,6 +3,7 @@ mod app;
 mod layout;
 mod utils;
 
+use crate::utils::socket::SocketError;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 use utils::{
@@ -20,11 +21,10 @@ fn main() -> Result<(), eframe::Error> {
     let config = AppConfigManager::load_yaml_from_file("database.yaml");
 
     let shared_peers = config.peer_list;
-     let shared_rooms = config.room_list;
+    let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
 
     let mut now = Utc::now() - Duration::seconds(40);
-
 
     let mut model = ChatModel::new(
         shared_peers.clone(),
@@ -90,17 +90,21 @@ fn main() -> Result<(), eframe::Error> {
         shipment_status: MessageStatus::Received(now, now + Duration::seconds(12)),
     });
 
-
-
-
     let model_arc = Arc::new(Mutex::new(model));
 
-    let socket_controller = DefaultSocketController::init_controller(local_peer.clone()).unwrap();
-    {
-        socket_controller
-            .lock()
-            .unwrap()
-            .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
+    match DefaultSocketController::init_controller(local_peer.clone()) {
+        Ok(controller) => {
+            controller
+                .lock()
+                .unwrap()
+                .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
+        }
+        Err(SocketError::Io(e)) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!("Socket address already in use. Make sure no other instance is running.");
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize socket controller: {:?}", e);
+        }
     }
 
     let options = eframe::NativeOptions::default();
