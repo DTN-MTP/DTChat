@@ -1,0 +1,47 @@
+syntax = "proto3";
+package dtchat;
+
+message ChatMessage {
+  string uuid = 1;
+  string sender_uuid = 2;
+  int64 timestamp = 3;
+  
+  oneof content {
+    TextMessage text = 4;
+    FileTransfer file = 5;
+    PresenceUpdate presence = 6;
+    DeliveryStatus delivery = 7;
+  }
+}
+
+message TextMessage {
+  string content = 1;
+  optional string reply_to_uuid = 2;
+}
+
+message FileTransfer {
+  string filename = 1;
+  string mime_type = 2;
+  uint64 file_size = 3;
+  bytes chunk_data = 4;
+  uint32 chunk_index = 5;
+  uint32 total_chunks = 6;
+  string file_hash = 7;
+}
+
+message PresenceUpdate {
+  enum Status {
+    UNKNOWN = 0;
+    ONLINE = 1;
+    AWAY = 2;
+    BUSY = 3;
+    OFFLINE = 4;
+  }
+  Status status = 1;
+}
+
+message DeliveryStatus {
+  string message_uuid = 1;
+  bool received = 2;
+  bool read = 3;
+}

@@ -8,7 +8,6 @@ use crate::utils::socket::{
 };
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
-use std::clone;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -103,6 +102,7 @@ impl ChatModel {
                 .unwrap_or_else(|i| i),
         };
         self.messages.insert(idx, new_msg.clone());
+        self.notify_observers(AppEvent::MessageReceived(new_msg));
     }
 
     pub fn send_message(&mut self, text: &str, receiver: Peer) {
@@ -141,8 +141,7 @@ impl ChatModel {
             text: text.to_string(),
             shipment_status: MessageStatus::Received(now.clone(), now),
         };
-        self.add_message(msg.clone());
-        self.notify_observers(AppEvent::MessageReceived(msg));
+        self.add_message(msg);
     }
 
     pub fn sort_messages(&mut self, strat: SortStrategy) {
@@ -197,7 +196,7 @@ impl ChatApp {
                     .format("%H:%M:%S")
                     .to_string(),
                 forging_receiver,
-                send_status: Some("Welcome to DTChat.".to_string()),
+                send_status: None,
             },
         };
         return app;
