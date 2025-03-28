@@ -14,7 +14,13 @@ tokio = { version = "1.30", features = ["rt-multi-thread", "macros", "io-util", 
 async-trait = "0.1"
 once_cell = "1.17"
 egui_plot = "0.31.0"
+prost = "0.12.3"
+bytes = "1.5.0"
+uuid = { version = "1.6.1", features = ["v4", "serde"] }
 
 [features]
 add_delay = []
 bp = []
+
+[build-dependencies]
+prost-build = "0.12.3"

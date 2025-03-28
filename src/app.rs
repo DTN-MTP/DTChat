@@ -3,9 +3,9 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::{self, display};
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{Message, MessageStatus};
+use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{
-    create_sending_socket, DefaultSocketController, Endpoint, SocketController, SocketObserver,
-};
+    create_sending_socket, SocketObserver};
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
@@ -106,26 +106,23 @@ impl ChatModel {
     }
 
     pub fn send_message(&mut self, text: &str, receiver: Peer) {
-        let mut msg = Message {
-            uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
+        let msg = Message {
+            uuid: generate_uuid(),
             response: None,
             sender: self.localpeer.clone(),
             text: text.to_string(),
             shipment_status: MessageStatus::Sent(Utc::now()),
         };
 
-        // todo, proto/endpoint choices
         let protocol = receiver.endpoints[0].clone();
-        let addr = protocol.to_string();
+        let socket = create_sending_socket(protocol, self.peers.clone());
 
-        let socket = create_sending_socket(protocol, &addr);
-
-        if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
-            eprintln!("Failed to send via TCP/UDP: {:?}", e);
+        if let Err(e) = socket.and_then(|mut s| s.send(&msg)) {
+            eprintln!("Failed to send message: {:?}", e);
             self.notify_observers(AppEvent::SendFailed(msg.clone()));
             return;
         }
-        msg.uuid = "PLACEHOLDER_CHANGE_THAT".to_string();
+        
         self.add_message(msg.clone());
         self.notify_observers(AppEvent::MessageSent(msg.clone()));
     }
@@ -133,7 +130,7 @@ impl ChatModel {
     pub fn receive_message(&mut self, text: &str, sender: Peer) {
         let now = Utc::now();
         let msg = Message {
-            uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
+            uuid: generate_uuid(),
             response: None,
             sender,
             text: text.to_string(),
