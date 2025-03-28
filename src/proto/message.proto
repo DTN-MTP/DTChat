@@ -5,12 +5,13 @@ message ChatMessage {
   string uuid = 1;
   string sender_uuid = 2;
   int64 timestamp = 3;
-  
+  string room_uuid = 4;
+
   oneof content {
-    TextMessage text = 4;
-    FileTransfer file = 5;
-    PresenceUpdate presence = 6;
-    DeliveryStatus delivery = 7;
+    TextMessage text = 5;
+    FileTransfer file = 6;
+    PresenceUpdate presence = 7;
+    DeliveryStatus delivery = 8;
   }
 }
 
