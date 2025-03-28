@@ -9,6 +9,7 @@ use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
     message::{Message, MessageStatus},
+    proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
 };
 
@@ -33,7 +34,7 @@ fn main() -> Result<(), eframe::Error> {
     );
 
     model.messages.push(Message {
-        uuid: "1".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: local_peer.clone(),
         text: "Hello from local peer".to_owned(),
@@ -43,7 +44,7 @@ fn main() -> Result<(), eframe::Error> {
     now += Duration::seconds(2);
 
     model.messages.push(Message {
-        uuid: "1".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: shared_peers[2].clone(),
         text: "Bob at your service !".to_owned(),
@@ -53,7 +54,7 @@ fn main() -> Result<(), eframe::Error> {
     now += Duration::seconds(1);
 
     model.messages.push(Message {
-        uuid: "2".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: shared_peers[0].clone(),
         text: "Hello local peer, how are you?".to_owned(),
@@ -63,7 +64,7 @@ fn main() -> Result<(), eframe::Error> {
     now += Duration::seconds(2);
 
     model.messages.push(Message {
-        uuid: "3".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: shared_peers[0].clone(),
         text: "I'm john does".to_owned(),
@@ -73,7 +74,7 @@ fn main() -> Result<(), eframe::Error> {
     now += Duration::seconds(13);
 
     model.messages.push(Message {
-        uuid: "4".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: local_peer.clone(),
         text: "Hello john doe, Some news from alice ?".to_owned(),
@@ -83,7 +84,7 @@ fn main() -> Result<(), eframe::Error> {
     now += Duration::seconds(5);
 
     model.messages.push(Message {
-        uuid: "1".to_string(),
+        uuid: generate_uuid(),
         response: None,
         sender: shared_peers[1].clone(),
         text: "Sorry, I'm a bit late!".to_owned(),
@@ -92,7 +93,7 @@ fn main() -> Result<(), eframe::Error> {
 
     let model_arc = Arc::new(Mutex::new(model));
 
-    match DefaultSocketController::init_controller(local_peer.clone()) {
+    match DefaultSocketController::init_controller(local_peer.clone(), shared_peers.clone()) {
         Ok(controller) => {
             controller
                 .lock()

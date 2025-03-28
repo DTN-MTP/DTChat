@@ -1,7 +1,9 @@
 use crate::utils::config::Peer;
+use crate::utils::message::Message;
+use crate::utils::proto::{deserialize_message, serialize_message};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+use socket2::{Domain, SockAddr, Socket, Type};
 use std::io::Error as IoError;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -34,6 +36,7 @@ fn ephemeral_local_addr_for(addr: &SocketAddr) -> SocketAddr {
 pub enum SocketError {
     Io(IoError),
     Custom(String),
+    Serialization(String),
 }
 
 impl From<IoError> for SocketError {
@@ -68,16 +71,17 @@ impl Endpoint {
     }
 }
 pub trait SendingSocket: Send + Sync {
-    fn send(&mut self, message: &str) -> Result<usize, SocketError>;
+    fn send(&mut self, message: &Message) -> Result<usize, SocketError>;
 }
 
 pub struct UdpSendingSocket {
     socket: UdpSocket,
     addr: SocketAddr,
+    peers: Vec<Peer>,
 }
 
 impl UdpSendingSocket {
-    pub async fn new(address: &str) -> Result<Self, SocketError> {
+    pub async fn new(address: &str, peers: Vec<Peer>) -> Result<Self, SocketError> {
         let addr: SocketAddr = address.parse()?;
         let local = ephemeral_local_addr_for(&addr);
 
@@ -89,22 +93,16 @@ impl UdpSendingSocket {
         Ok(Self {
             socket: udp_socket,
             addr,
+            peers,
         })
     }
 }
 
 impl SendingSocket for UdpSendingSocket {
-    fn send(&mut self, message: &str) -> Result<usize, SocketError> {
+    fn send(&mut self, message: &Message) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async {
-            // maybe_delay().await;
-            // println!(
-            //     "UDP: sending {} bytes to {}, content: \"{}\"",
-            //     message.len(),
-            //     self.addr,
-            //     message
-            // );
-
-            let bytes_sent = self.socket.send_to(message.as_bytes(), &self.addr).await?;
+            let serialized = serialize_message(message);
+            let bytes_sent = self.socket.send_to(&serialized, &self.addr).await?;
             println!(
                 "UDP: successfully sent {} bytes to {}",
                 bytes_sent, self.addr
@@ -117,35 +115,30 @@ impl SendingSocket for UdpSendingSocket {
 
 pub struct TcpSendingSocket {
     addr: SocketAddr,
+    peers: Vec<Peer>,
 }
 
 impl TcpSendingSocket {
-    pub async fn new(address: &str) -> Result<Self, SocketError> {
+    pub async fn new(address: &str, peers: Vec<Peer>) -> Result<Self, SocketError> {
         let addr: SocketAddr = address.parse()?;
-        Ok(Self { addr })
+        Ok(Self { addr, peers })
     }
 }
 
 impl SendingSocket for TcpSendingSocket {
-    fn send(&mut self, message: &str) -> Result<usize, SocketError> {
+    fn send(&mut self, message: &Message) -> Result<usize, SocketError> {
         TOKIO_RUNTIME.block_on(async {
             let mut stream = TcpStream::connect(self.addr).await.map_err(|e| {
                 println!("TCP: failed to connect to {}: {:?}", self.addr, e);
                 SocketError::Io(e)
             })?;
 
-            // maybe_delay().await;
-            // println!(
-            //     "TCP: sending {} bytes to remote, content: \"{}\"",
-            //     message.len(),
-            //     message
-            // );
-
-            stream.write_all(message.as_bytes()).await?;
+            let serialized = serialize_message(message);
+            stream.write_all(&serialized).await?;
             stream.shutdown().await?;
 
-            println!("TCP: successfully sent {} bytes to remote", message.len());
-            Ok(message.len())
+            println!("TCP: successfully sent {} bytes to remote", serialized.len());
+            Ok(serialized.len())
         })
     }
 }
@@ -158,10 +151,11 @@ mod bp_socket {
     pub struct BpSendingSocket {
         socket: UdpSocket,
         addr: SocketAddr,
+        peers: Vec<Peer>,
     }
 
     impl BpSendingSocket {
-        pub async fn new(address: &str) -> Result<Self, SocketError> {
+        pub async fn new(address: &str, peers: Vec<Peer>) -> Result<Self, SocketError> {
             let addr: SocketAddr = address.parse()?;
             let local = ephemeral_local_addr_for(&addr);
 
@@ -170,22 +164,15 @@ mod bp_socket {
             std_socket.set_nonblocking(true)?;
             let socket = UdpSocket::from_std(std_socket.into())?;
 
-            Ok(Self { socket, addr })
+            Ok(Self { socket, addr, peers })
         }
     }
 
     impl SendingSocket for BpSendingSocket {
-        fn send(&mut self, message: &str) -> Result<usize, SocketError> {
+        fn send(&mut self, message: &Message) -> Result<usize, SocketError> {
             TOKIO_RUNTIME.block_on(async {
-                // maybe_delay().await;
-                // println!(
-                //     "(BP) Stub sending '{}' ({} bytes) to '{}'",
-                //     message,
-                //     message.len(),
-                //     self.addr
-                // );
-
-                Ok(message.len())
+                let serialized = serialize_message(message);
+                Ok(serialized.len())
             })
         }
     }
@@ -193,23 +180,26 @@ mod bp_socket {
 
 pub fn create_sending_socket(
     protocol: Endpoint,
-    address: &str,
+    peers: Vec<Peer>,
 ) -> Result<Box<dyn SendingSocket>, SocketError> {
     match protocol {
-        Endpoint::Udp(address) => {
-            let socket =
-                TOKIO_RUNTIME.block_on(async { UdpSendingSocket::new(address.as_str()).await })?;
+        Endpoint::Udp(addr) => {
+            let socket = TOKIO_RUNTIME.block_on(async { 
+                UdpSendingSocket::new(&addr, peers).await 
+            })?;
             Ok(Box::new(socket))
         }
-        Endpoint::Tcp(address) => {
-            let socket =
-                TOKIO_RUNTIME.block_on(async { TcpSendingSocket::new(address.as_str()).await })?;
+        Endpoint::Tcp(addr) => {
+            let socket = TOKIO_RUNTIME.block_on(async {
+                TcpSendingSocket::new(&addr, peers).await
+            })?;
             Ok(Box::new(socket))
         }
         #[cfg(feature = "bp")]
-        Endpoint::Bp(address) => {
-            let socket =
-                TOKIO_RUNTIME.block_on(async { BpSendingSocket::new(address.as_str()).await })?;
+        Endpoint::Bp(addr) => {
+            let socket = TOKIO_RUNTIME.block_on(async {
+                BpSendingSocket::new(&addr, peers).await
+            })?;
             Ok(Box::new(socket))
         }
     }
@@ -238,6 +228,7 @@ pub trait SocketController: Send + Sync {
 pub struct DefaultSocketController {
     observers: Vec<Arc<dyn SocketObserver + Send + Sync>>,
     local_peer: Option<Peer>,
+    peers: Vec<Peer>,
     udp_socket: Option<UdpSocket>,
     tcp_listener: Option<TcpListener>,
 }
@@ -247,6 +238,7 @@ impl DefaultSocketController {
         Self {
             observers: Vec::new(),
             local_peer: None,
+            peers: Vec::new(),
             udp_socket: None,
             tcp_listener: None,
         }
@@ -267,28 +259,22 @@ impl DefaultSocketController {
         controller_arc: Arc<Mutex<DefaultSocketController>>,
         socket: UdpSocket,
     ) {
-        let mut buf = [0u8; 1024];
+        let mut buf = [0u8; 4096];
         loop {
             match socket.recv_from(&mut buf).await {
                 Ok((n, addr)) => {
-                    let text = String::from_utf8_lossy(&buf[..n]).to_string();
-
-                    let (sender, controller) = {
-                        let guard = controller_arc.lock().unwrap();
-                        (
-                            guard.local_peer.clone().unwrap(),
-                            Arc::clone(&controller_arc),
-                        )
-                    };
-
-                    println!(
-                        "UDP: received {} bytes from {}, content: \"{}\"",
-                        n, addr, text
-                    );
-
+                    let controller = Arc::clone(&controller_arc);
+                    let buf_data = buf[..n].to_vec();
+                    
                     TOKIO_RUNTIME.spawn(async move {
                         let guard = controller.lock().unwrap();
-                        guard.notify_observers(&text, sender);
+                        let peers = guard.peers.clone();
+                        
+                        if let Some(message) = deserialize_message(&buf_data, &peers) {
+                            guard.notify_observers(&message.text, message.sender);
+                        } else {
+                            println!("UDP: failed to deserialize message from {}", addr);
+                        }
                     });
                 }
                 Err(e) => {
@@ -307,27 +293,21 @@ impl DefaultSocketController {
             match listener.accept().await {
                 Ok((mut stream, addr)) => {
                     println!("TCP: accepted connection from {}", addr);
-                    let mut buf = [0u8; 1024];
-                    match stream.read(&mut buf).await {
+                    let mut buf = Vec::new();
+                    
+                    match stream.read_to_end(&mut buf).await {
                         Ok(n) if n > 0 => {
-                            let text = String::from_utf8_lossy(&buf[..n]).to_string();
-
-                            let (sender, controller) = {
-                                let guard = controller_arc.lock().unwrap();
-                                (
-                                    guard.local_peer.clone().unwrap(),
-                                    Arc::clone(&controller_arc),
-                                )
-                            };
-
-                            println!(
-                                "TCP: received {} bytes from {}, content: \"{}\"",
-                                n, addr, text
-                            );
-
+                            let controller = Arc::clone(&controller_arc);
+                            
                             TOKIO_RUNTIME.spawn(async move {
                                 let guard = controller.lock().unwrap();
-                                guard.notify_observers(&text, sender);
+                                let peers = guard.peers.clone();
+                                
+                                if let Some(message) = deserialize_message(&buf, &peers) {
+                                    guard.notify_observers(&message.text, message.sender);
+                                } else {
+                                    println!("TCP: failed to deserialize message from {}", addr);
+                                }
                             });
                         }
                         Ok(_) => {
@@ -348,10 +328,10 @@ impl DefaultSocketController {
 
     pub fn init_controller(
         local_peer: Peer,
+        peers: Vec<Peer>,
     ) -> Result<Arc<Mutex<DefaultSocketController>>, SocketError> {
         let mut udp_socket = None;
         let mut tcp_listener = None;
-        // todo : bp
 
         for endpoint in &local_peer.endpoints {
             match endpoint {
@@ -362,30 +342,35 @@ impl DefaultSocketController {
                 Endpoint::Tcp(addr) => {
                     tcp_listener =
                         Some(TOKIO_RUNTIME.block_on(async { start_tcp_listener(&addr).await })?)
-                } // todo : bp
+                }
+                #[cfg(feature = "bp")]
+                Endpoint::Bp(_) => {}
             }
         }
 
         let mut controller = Self::new();
         controller.local_peer = Some(local_peer);
+        controller.peers = peers;
         controller.udp_socket = udp_socket;
         controller.tcp_listener = tcp_listener;
 
         let controller_arc = Arc::new(Mutex::new(controller));
 
-        let arc_clone = Arc::clone(&controller_arc);
-        TOKIO_RUNTIME.spawn(async move {
-            let socket = arc_clone.lock().unwrap().udp_socket.take().unwrap();
-            DefaultSocketController::run_udp_listener(arc_clone, socket).await;
-        });
+        if let Some(_) = &controller_arc.lock().unwrap().udp_socket {
+            let arc_clone = Arc::clone(&controller_arc);
+            TOKIO_RUNTIME.spawn(async move {
+                let socket = arc_clone.lock().unwrap().udp_socket.take().unwrap();
+                DefaultSocketController::run_udp_listener(arc_clone, socket).await;
+            });
+        }
 
-        let arc_clone = Arc::clone(&controller_arc);
-        TOKIO_RUNTIME.spawn(async move {
-            let listener = arc_clone.lock().unwrap().tcp_listener.take().unwrap();
-            DefaultSocketController::run_tcp_listener(arc_clone, listener).await;
-        });
-
-        // todo : bp
+        if let Some(_) = &controller_arc.lock().unwrap().tcp_listener {
+            let arc_clone = Arc::clone(&controller_arc);
+            TOKIO_RUNTIME.spawn(async move {
+                let listener = arc_clone.lock().unwrap().tcp_listener.take().unwrap();
+                DefaultSocketController::run_tcp_listener(arc_clone, listener).await;
+            });
+        }
 
         Ok(controller_arc)
     }
