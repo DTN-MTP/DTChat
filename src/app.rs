@@ -4,7 +4,7 @@ use crate::layout::ui::{self, display};
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{Message, MessageStatus};
 use crate::utils::socket::{
-    create_sending_socket, DefaultSocketController, Endpoint, SocketController, SocketObserver,
+    DefaultSocketController, Endpoint, GenericSocket, SocketController, SocketObserver,
 };
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
@@ -118,9 +118,9 @@ impl ChatModel {
         let protocol = receiver.endpoints[0].clone();
         let addr = protocol.to_string();
 
-        let socket = create_sending_socket(protocol, &addr);
+        let socket = GenericSocket::new(&receiver.endpoints[0]);
 
-        if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
+        if let Err(e) = socket.and_then(|mut s| s.send(&msg.text.as_bytes())) {
             eprintln!("Failed to send via TCP/UDP: {:?}", e);
             self.notify_observers(AppEvent::SendFailed(msg.clone()));
             return;
@@ -130,8 +130,11 @@ impl ChatModel {
         self.notify_observers(AppEvent::MessageSent(msg.clone()));
     }
 
-    pub fn receive_message(&mut self, text: &str, sender: Peer) {
+    pub fn receive_message(&mut self, text: &str, sender_id: String) {
         let now = Utc::now();
+
+        let sender = self.localpeer.clone(); // TODO change
+
         let msg = Message {
             uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
             response: None,
@@ -155,9 +158,10 @@ impl ChatModel {
 }
 
 impl SocketObserver for Mutex<ChatModel> {
-    fn on_socket_event(&self, text: &str, sender: Peer) {
+    fn on_socket_event(&self, text: &str, sender_id: String) {
         let mut model = self.lock().unwrap();
-        model.receive_message(text, sender);
+
+        model.receive_message(text, sender_id);
     }
 }
 

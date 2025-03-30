@@ -3,7 +3,6 @@ mod app;
 mod layout;
 mod utils;
 
-use crate::utils::socket::SocketError;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 use utils::{
@@ -98,9 +97,6 @@ fn main() -> Result<(), eframe::Error> {
                 .lock()
                 .unwrap()
                 .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
-        }
-        Err(SocketError::Io(e)) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            eprintln!("Socket address already in use. Make sure no other instance is running.");
         }
         Err(e) => {
             eprintln!("Failed to initialize socket controller: {:?}", e);
