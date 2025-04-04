@@ -3,15 +3,15 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::config::Peer;
-use super::message::{Message as AppMessage, MessageStatus};
+use super::message::{ChatMessage, MessageStatus};
 
 pub mod dtchat {
     include!(concat!(env!("OUT_DIR"), "/dtchat.rs"));
 }
 
-pub fn serialize_message(message: &AppMessage) -> Bytes {
+pub fn serialize_message(message: &ChatMessage) -> Bytes {
     #[cfg(debug_assertions)]
-    return Bytes::from(format!("{}\n", message.text));
+    return Bytes::from(message.text.clone() + "\n");
 
     #[cfg(not(debug_assertions))]
     {
@@ -23,7 +23,7 @@ pub fn serialize_message(message: &AppMessage) -> Bytes {
     }
 }
 
-pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<AppMessage> {
+pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<ChatMessage> {
     #[cfg(not(debug_assertions))]
     {
         use prost::Message;
@@ -32,24 +32,40 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<AppMessage> {
         }
     }
     
-    // Fallback to plain text for both debug mode and when protobuf parsing fails
-    parse_text_message(buf, peers)
-}
-
-fn parse_text_message(buf: &[u8], peers: &[Peer]) -> Option<AppMessage> {
     if let Ok(text) = std::str::from_utf8(buf) {
         let text = text.trim();
         if !text.is_empty() {
-            return Some(AppMessage {
+            let now = Utc::now();
+            let default_peer = find_peer_by_id(peers, "0").unwrap_or_else(default_peer);
+            
+            return Some(ChatMessage {
                 uuid: generate_uuid(),
                 response: None,
-                sender: peers.first()?.clone(),
+                sender: default_peer,
                 text: text.to_string(),
-                shipment_status: MessageStatus::Received(Utc::now(), Utc::now()),
+                shipment_status: MessageStatus::Received(now, now),
             });
         }
     }
     None
+}
+
+fn find_peer_by_id(peers: &[Peer], id: &str) -> Option<Peer> {
+    peers.iter().find(|p| p.uuid == id).cloned()
+}
+
+fn default_peer() -> Peer {
+    Peer::default()
+}
+
+pub fn create_message(text: &str, sender: Peer) -> ChatMessage {
+    ChatMessage {
+        uuid: generate_uuid(),
+        response: None,
+        sender,
+        text: text.to_string(),
+        shipment_status: MessageStatus::Received(Utc::now(), Utc::now()),
+    }
 }
 
 pub fn generate_uuid() -> String {
@@ -57,7 +73,7 @@ pub fn generate_uuid() -> String {
 }
 
 #[cfg(not(debug_assertions))]
-fn construct_proto_message(message: &AppMessage) -> dtchat::ChatMessage {
+fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
     use chrono::TimeZone;
     
     let (tx_time, _) = message.get_timestamps();
@@ -74,16 +90,16 @@ fn construct_proto_message(message: &AppMessage) -> dtchat::ChatMessage {
         uuid: message.uuid.clone(),
         sender_uuid: message.sender.uuid.clone(),
         timestamp: tx_time as i64,
-        room_uuid: "default".to_string(), 
+        room_uuid: "default".to_string(),
         content,
     }
 }
 
 #[cfg(not(debug_assertions))]
-fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<AppMessage> {
+fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<ChatMessage> {
     use chrono::TimeZone;
     
-    let sender = peers.iter().find(|p| p.uuid == proto.sender_uuid)?;
+    let sender = find_peer_by_id(peers, &proto.sender_uuid).unwrap_or_else(default_peer);
     
     let content = proto.content.clone()?;
     
@@ -100,10 +116,10 @@ fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Opt
     let tx_time = Utc.timestamp_millis_opt(proto.timestamp).single()?;
     let rx_time = Utc::now();
     
-    Some(AppMessage {
+    Some(ChatMessage {
         uuid: proto.uuid,
         response: reply_to,
-        sender: sender.clone(),
+        sender,
         text,
         shipment_status: MessageStatus::Received(tx_time, rx_time),
     })

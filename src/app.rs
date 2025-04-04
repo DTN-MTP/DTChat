@@ -1,11 +1,12 @@
 use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
-use crate::layout::ui::{self, display};
+use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
-use crate::utils::message::{Message, MessageStatus};
+use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{
-    create_sending_socket, SocketObserver};
+    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController, SocketObserver,
+};
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
@@ -14,9 +15,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub enum AppEvent {
-    SendFailed(Message),
-    MessageSent(Message),
-    MessageReceived(Message),
+    SendFailed(ChatMessage),
+    MessageSent(ChatMessage),
+    MessageReceived(ChatMessage),
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -25,7 +26,7 @@ pub enum SortStrategy {
     Relative(Peer),
 }
 
-fn standard_cmp(a: &Message, b: &Message) -> Ordering {
+fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
@@ -37,7 +38,7 @@ fn standard_cmp(a: &Message, b: &Message) -> Ordering {
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
 }
 
-fn relative_cmp(a: &Message, b: &Message, ctx_peer_uuid: &str) -> Ordering {
+fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
@@ -64,7 +65,7 @@ pub struct ChatModel {
     pub localpeer: Peer,
     pub peers: Vec<Peer>,
     pub rooms: Vec<Room>,
-    pub messages: Vec<Message>,
+    pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
 }
 
@@ -90,7 +91,7 @@ impl ChatModel {
         }
     }
 
-    pub fn add_message(&mut self, new_msg: Message) {
+    pub fn add_message(&mut self, new_msg: ChatMessage) {
         let idx = match &self.sort_strategy {
             SortStrategy::Standard => self
                 .messages
@@ -106,7 +107,7 @@ impl ChatModel {
     }
 
     pub fn send_message(&mut self, text: &str, receiver: Peer) {
-        let msg = Message {
+        let msg = ChatMessage {
             uuid: generate_uuid(),
             response: None,
             sender: self.localpeer.clone(),
@@ -114,10 +115,9 @@ impl ChatModel {
             shipment_status: MessageStatus::Sent(Utc::now()),
         };
 
-        let protocol = receiver.endpoints[0].clone();
-        let socket = create_sending_socket(protocol, self.peers.clone());
+        let socket = GenericSocket::new(&receiver.endpoints[0]);
 
-        if let Err(e) = socket.and_then(|mut s| s.send(&msg)) {
+        if let Err(e) = socket.and_then(|mut s| s.send_message(&msg)) {
             eprintln!("Failed to send message: {:?}", e);
             self.notify_observers(AppEvent::SendFailed(msg.clone()));
             return;
@@ -125,18 +125,6 @@ impl ChatModel {
         
         self.add_message(msg.clone());
         self.notify_observers(AppEvent::MessageSent(msg.clone()));
-    }
-
-    pub fn receive_message(&mut self, text: &str, sender: Peer) {
-        let now = Utc::now();
-        let msg = Message {
-            uuid: generate_uuid(),
-            response: None,
-            sender,
-            text: text.to_string(),
-            shipment_status: MessageStatus::Received(now.clone(), now),
-        };
-        self.add_message(msg);
     }
 
     pub fn sort_messages(&mut self, strat: SortStrategy) {
@@ -152,9 +140,9 @@ impl ChatModel {
 }
 
 impl SocketObserver for Mutex<ChatModel> {
-    fn on_socket_event(&self, text: &str, sender: Peer) {
+    fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
-        model.receive_message(text, sender);
+        model.add_message(message);
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::app::ChatApp;
 use crate::utils::colors::COLORS;
-use crate::utils::message::{Message, MessageStatus};
+use crate::utils::message::{ChatMessage, MessageStatus};
 use chrono::Local;
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};

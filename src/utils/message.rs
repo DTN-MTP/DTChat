@@ -9,7 +9,7 @@ pub enum MessageStatus {
 }
 
 #[derive(Clone)]
-pub struct Message {
+pub struct ChatMessage {
     pub uuid: String,
     pub response: Option<String>,
     pub sender: Peer,
@@ -17,7 +17,7 @@ pub struct Message {
     pub shipment_status: MessageStatus,
 }
 
-impl Message {
+impl ChatMessage {
     pub fn get_shipment_status_str(&self) -> String {
         match &self.shipment_status {
             MessageStatus::Sent(tx) => {

@@ -3,12 +3,11 @@ mod app;
 mod layout;
 mod utils;
 
-use crate::utils::socket::SocketError;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
-    message::{Message, MessageStatus},
+    message::{ChatMessage, MessageStatus},
     proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
 };
@@ -33,7 +32,7 @@ fn main() -> Result<(), eframe::Error> {
         shared_rooms.clone(),
     );
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: local_peer.clone(),
@@ -43,7 +42,7 @@ fn main() -> Result<(), eframe::Error> {
 
     now += Duration::seconds(2);
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: shared_peers[2].clone(),
@@ -53,7 +52,7 @@ fn main() -> Result<(), eframe::Error> {
 
     now += Duration::seconds(1);
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: shared_peers[0].clone(),
@@ -63,7 +62,7 @@ fn main() -> Result<(), eframe::Error> {
 
     now += Duration::seconds(2);
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: shared_peers[0].clone(),
@@ -73,7 +72,7 @@ fn main() -> Result<(), eframe::Error> {
 
     now += Duration::seconds(13);
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: local_peer.clone(),
@@ -83,7 +82,7 @@ fn main() -> Result<(), eframe::Error> {
 
     now += Duration::seconds(5);
 
-    model.messages.push(Message {
+    model.messages.push(ChatMessage {
         uuid: generate_uuid(),
         response: None,
         sender: shared_peers[1].clone(),
@@ -99,9 +98,6 @@ fn main() -> Result<(), eframe::Error> {
                 .lock()
                 .unwrap()
                 .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
-        }
-        Err(SocketError::Io(e)) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            eprintln!("Socket address already in use. Make sure no other instance is running.");
         }
         Err(e) => {
             eprintln!("Failed to initialize socket controller: {:?}", e);
