@@ -5,7 +5,8 @@ use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{
-    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController, SocketObserver,
+    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
+    SocketObserver,
 };
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
@@ -15,9 +16,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub enum AppEvent {
-    SendFailed(ChatMessage),
-    MessageSent(ChatMessage),
-    MessageReceived(ChatMessage),
+    MessageError(String),
+    MessageSent(String),
+    MessageReceived(String),
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -69,6 +70,11 @@ pub struct ChatModel {
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
 }
 
+pub enum MessageDirection {
+    Sent,
+    Received,
+}
+
 impl ChatModel {
     pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>) -> Self {
         Self {
@@ -91,7 +97,7 @@ impl ChatModel {
         }
     }
 
-    pub fn add_message(&mut self, new_msg: ChatMessage) {
+    pub fn add_message(&mut self, new_msg: ChatMessage, direction: MessageDirection) {
         let idx = match &self.sort_strategy {
             SortStrategy::Standard => self
                 .messages
@@ -103,28 +109,14 @@ impl ChatModel {
                 .unwrap_or_else(|i| i),
         };
         self.messages.insert(idx, new_msg.clone());
-        self.notify_observers(AppEvent::MessageReceived(new_msg));
-    }
 
-    pub fn send_message(&mut self, text: &str, receiver: Peer) {
-        let msg = ChatMessage {
-            uuid: generate_uuid(),
-            response: None,
-            sender: self.localpeer.clone(),
-            text: text.to_string(),
-            shipment_status: MessageStatus::Sent(Utc::now()),
+        let event = match direction {
+            MessageDirection::Sent => AppEvent::MessageSent("Message sent.".to_string()),
+            MessageDirection::Received => {
+                AppEvent::MessageReceived(format!("New message from {}", new_msg.sender.name))
+            }
         };
-
-        let socket = GenericSocket::new(&receiver.endpoints[0]);
-
-        if let Err(e) = socket.and_then(|mut s| s.send_message(&msg)) {
-            eprintln!("Failed to send message: {:?}", e);
-            self.notify_observers(AppEvent::SendFailed(msg.clone()));
-            return;
-        }
-        
-        self.add_message(msg.clone());
-        self.notify_observers(AppEvent::MessageSent(msg.clone()));
+        self.notify_observers(event);
     }
 
     pub fn sort_messages(&mut self, strat: SortStrategy) {
@@ -142,7 +134,7 @@ impl ChatModel {
 impl SocketObserver for Mutex<ChatModel> {
     fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
-        model.add_message(message);
+        model.add_message(message, MessageDirection::Received);
     }
 }
 

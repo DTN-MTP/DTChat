@@ -32,7 +32,6 @@ impl Endpoint {
     }
 }
 pub struct GenericSocket {
-    observers: Vec<Arc<dyn SocketObserver + Send + Sync>>,
     socket: Socket,
     eidpoint: Endpoint,
     sockaddr: SocketAddr,
@@ -60,7 +59,6 @@ impl GenericSocket {
         };
 
         return Ok(Self {
-            observers: Vec::new(),
             socket: socket,
             eidpoint: eid.clone(),
             sockaddr: address,
@@ -126,8 +124,10 @@ impl GenericSocket {
                                     TOKIO_RUNTIME.spawn(async move {
                                         let controller = new_controller_arc.lock().unwrap();
                                         let peers = controller.get_peers();
-                                    
-                                        if let Some(message) = deserialize_message(&buffer_initialized, &peers) {
+
+                                        if let Some(message) =
+                                            deserialize_message(&buffer_initialized, &peers)
+                                        {
                                             controller.notify_observers(message);
                                         }
                                     });
@@ -152,12 +152,9 @@ impl GenericSocket {
                     move || loop {
                         match socket.accept() {
                             Ok((stream, _peer)) => {
-                                println!(
-                                    "TCP received data on listening address {}",
-                                    address
-                                );
+                                println!("TCP received data on listening address {}", address);
                                 let new_controller_arc = Arc::clone(&controller_arc);
-                                
+
                                 TOKIO_RUNTIME.spawn(async move {
                                     handle_tcp_connection(stream.into(), new_controller_arc).await;
                                 });
@@ -189,7 +186,7 @@ async fn handle_tcp_connection(
             let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
-            
+
             if let Some(message) = deserialize_message(buffer_slice, &peers) {
                 controller.notify_observers(message);
             }
@@ -228,15 +225,15 @@ impl DefaultSocketController {
             peers: Vec::new(),
         }
     }
-    
+
     pub fn set_peers(&mut self, peers: Vec<Peer>) {
         self.peers = peers;
     }
-    
+
     pub fn get_peers(&self) -> Vec<Peer> {
         self.peers.clone()
     }
-    
+
     pub fn set_local_peer(&mut self, peer: Peer) {
         self.local_peer = Some(peer);
     }
@@ -245,11 +242,9 @@ impl DefaultSocketController {
         let observers_clone = self.observers.clone();
         let message_clone = message.clone();
 
-        TOKIO_RUNTIME.spawn(async move {
-            for observer in observers_clone {
-                observer.on_socket_event(message_clone.clone());
-            }
-        });
+        for observer in observers_clone {
+            observer.on_socket_event(message_clone.clone());
+        }
     }
 
     pub fn init_controller(
@@ -259,7 +254,7 @@ impl DefaultSocketController {
         let mut controller = Self::new();
         controller.set_local_peer(local_peer.clone());
         controller.set_peers(peers);
-        
+
         let controller_arc = Arc::new(Mutex::new(controller));
 
         for endpoint in &local_peer.endpoints {

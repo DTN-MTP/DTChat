@@ -31,13 +31,13 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<ChatMessage> {
             return extract_message_from_proto(proto_msg, peers);
         }
     }
-    
+
     if let Ok(text) = std::str::from_utf8(buf) {
         let text = text.trim();
         if !text.is_empty() {
             let now = Utc::now();
             let default_peer = find_peer_by_id(peers, "0").unwrap_or_else(default_peer);
-            
+
             return Some(ChatMessage {
                 uuid: generate_uuid(),
                 response: None,
@@ -75,9 +75,9 @@ pub fn generate_uuid() -> String {
 #[cfg(not(debug_assertions))]
 fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
     use chrono::TimeZone;
-    
+
     let (tx_time, _) = message.get_timestamps();
-    
+
     let content = {
         let text_message = dtchat::TextMessage {
             content: message.text.clone(),
@@ -98,24 +98,24 @@ fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
 #[cfg(not(debug_assertions))]
 fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<ChatMessage> {
     use chrono::TimeZone;
-    
+
     let sender = find_peer_by_id(peers, &proto.sender_uuid).unwrap_or_else(default_peer);
-    
+
     let content = proto.content.clone()?;
-    
+
     let text = match &content {
         dtchat::chat_message::Content::Text(text_msg) => text_msg.content.clone(),
-        _ => return None, 
+        _ => return None,
     };
-    
+
     let reply_to = match &content {
         dtchat::chat_message::Content::Text(text_msg) => text_msg.reply_to_uuid.clone(),
         _ => None,
     };
-    
+
     let tx_time = Utc.timestamp_millis_opt(proto.timestamp).single()?;
     let rx_time = Utc::now();
-    
+
     Some(ChatMessage {
         uuid: proto.uuid,
         response: reply_to,
@@ -123,4 +123,4 @@ fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Opt
         text,
         shipment_status: MessageStatus::Received(tx_time, rx_time),
     })
-} 
+}
