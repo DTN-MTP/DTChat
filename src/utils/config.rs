@@ -14,6 +14,17 @@ pub struct Peer {
     pub color: u32,
 }
 
+impl Default for Peer {
+    fn default() -> Self {
+        Self {
+            uuid: "unknown".to_string(),
+            name: "Unknown".to_string(),
+            endpoints: Vec::new(),
+            color: 0,
+        }
+    }
+}
+
 impl Peer {
     pub fn get_color(&self) -> egui::Color32 {
         let color_id = self.color % 4;
