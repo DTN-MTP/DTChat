@@ -108,25 +108,23 @@ impl GenericSocket {
                 let address = addr.clone();
 
                 TOKIO_RUNTIME.spawn_blocking({
-                    let socket = self.socket.try_clone()?; // Clone the socket for the async thread
+                    let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
                     move || {
-                        let mut buffer = [MaybeUninit::uninit(); 1024];
+                        let mut buffer: [u8;1024] = [0; 1024];
                         loop {
-                            match socket.recv_from(&mut buffer) {
-                                Ok((_size, _senderr)) => {
+                            match socket.read(&mut buffer) {
+                                Ok((size)) => {
                                     println!(
                                         "UDP/BP received data on listening address {}",
                                         address
                                     );
                                     let new_controller_arc = Arc::clone(&controller_arc);
-                                    let buffer_initialized =
-                                        unsafe { std::mem::transmute::<_, [u8; 1024]>(buffer) };
                                     TOKIO_RUNTIME.spawn(async move {
                                         let controller = new_controller_arc.lock().unwrap();
                                         let peers = controller.get_peers();
 
                                         if let Some(message) =
-                                            deserialize_message(&buffer_initialized, &peers)
+                                            deserialize_message(&buffer[..size], &peers)
                                         {
                                             controller.notify_observers(message);
                                         }
