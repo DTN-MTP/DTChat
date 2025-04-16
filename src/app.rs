@@ -1,10 +1,12 @@
 use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
-use crate::layout::ui::{self, display};
+use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
-use crate::utils::message::{Message, MessageStatus};
+use crate::utils::message::{ChatMessage, MessageStatus};
+use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{
-    create_sending_socket, DefaultSocketController, Endpoint, SocketController, SocketObserver,
+    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
+    SocketObserver,
 };
 use chrono::{Duration, Local, Utc};
 use eframe::egui;
@@ -14,9 +16,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub enum AppEvent {
-    SendFailed(Message),
-    MessageSent(Message),
-    MessageReceived(Message),
+    MessageError(String),
+    MessageSent(String),
+    MessageReceived(String),
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -25,7 +27,7 @@ pub enum SortStrategy {
     Relative(Peer),
 }
 
-fn standard_cmp(a: &Message, b: &Message) -> Ordering {
+fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
@@ -37,7 +39,7 @@ fn standard_cmp(a: &Message, b: &Message) -> Ordering {
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
 }
 
-fn relative_cmp(a: &Message, b: &Message, ctx_peer_uuid: &str) -> Ordering {
+fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
@@ -64,8 +66,13 @@ pub struct ChatModel {
     pub localpeer: Peer,
     pub peers: Vec<Peer>,
     pub rooms: Vec<Room>,
-    pub messages: Vec<Message>,
+    pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
+}
+
+pub enum MessageDirection {
+    Sent,
+    Received,
 }
 
 impl ChatModel {
@@ -90,7 +97,7 @@ impl ChatModel {
         }
     }
 
-    pub fn add_message(&mut self, new_msg: Message) {
+    pub fn add_message(&mut self, new_msg: ChatMessage, direction: MessageDirection) {
         let idx = match &self.sort_strategy {
             SortStrategy::Standard => self
                 .messages
@@ -102,44 +109,14 @@ impl ChatModel {
                 .unwrap_or_else(|i| i),
         };
         self.messages.insert(idx, new_msg.clone());
-        self.notify_observers(AppEvent::MessageReceived(new_msg));
-    }
 
-    pub fn send_message(&mut self, text: &str, receiver: Peer) {
-        let mut msg = Message {
-            uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
-            response: None,
-            sender: self.localpeer.clone(),
-            text: text.to_string(),
-            shipment_status: MessageStatus::Sent(Utc::now()),
+        let event = match direction {
+            MessageDirection::Sent => AppEvent::MessageSent("Message sent.".to_string()),
+            MessageDirection::Received => {
+                AppEvent::MessageReceived(format!("New message from {}", new_msg.sender.name))
+            }
         };
-
-        // todo, proto/endpoint choices
-        let protocol = receiver.endpoints[0].clone();
-        let addr = protocol.to_string();
-
-        let socket = create_sending_socket(protocol, &addr);
-
-        if let Err(e) = socket.and_then(|mut s| s.send(&msg.text)) {
-            eprintln!("Failed to send via TCP/UDP: {:?}", e);
-            self.notify_observers(AppEvent::SendFailed(msg.clone()));
-            return;
-        }
-        msg.uuid = "PLACEHOLDER_CHANGE_THAT".to_string();
-        self.add_message(msg.clone());
-        self.notify_observers(AppEvent::MessageSent(msg.clone()));
-    }
-
-    pub fn receive_message(&mut self, text: &str, sender: Peer) {
-        let now = Utc::now();
-        let msg = Message {
-            uuid: "PLACEHOLDER_CHANGE_THAT".to_string(),
-            response: None,
-            sender,
-            text: text.to_string(),
-            shipment_status: MessageStatus::Received(now.clone(), now),
-        };
-        self.add_message(msg);
+        self.notify_observers(event);
     }
 
     pub fn sort_messages(&mut self, strat: SortStrategy) {
@@ -155,9 +132,9 @@ impl ChatModel {
 }
 
 impl SocketObserver for Mutex<ChatModel> {
-    fn on_socket_event(&self, text: &str, sender: Peer) {
+    fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
-        model.receive_message(text, sender);
+        model.add_message(message, MessageDirection::Received);
     }
 }
 
