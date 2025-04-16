@@ -33,7 +33,7 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<ChatMessage> {
     }
 
     if let Ok(text) = std::str::from_utf8(buf) {
-        let text = text.trim();
+        let text = text.trim_end();
         if !text.is_empty() {
             let now = Utc::now();
             let default_peer = find_peer_by_id(peers, "0").unwrap_or_else(default_peer);
