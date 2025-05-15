@@ -6,6 +6,8 @@ local_peer:
       address: "127.0.0.1:7000"
     - type: Tcp
       address: "127.0.0.1:7001"
+    - type: Bp
+      address: "ipn:3.1"
   color: 3
 # This is a local peer with multiple endpoints
 
@@ -15,6 +17,8 @@ peer_list:
     endpoints:
       - type: Udp
         address: "127.0.0.1:8080"
+      - type: Bp
+        address: "ipn:0.1"
     color: 0
 
   - uuid: 1
@@ -22,6 +26,8 @@ peer_list:
     endpoints:
       - type: Udp
         address: "127.0.0.1:12345"
+      - type: Bp
+        address: "ipn:1.1"
     color: 1
 
   - uuid: 2
@@ -29,6 +35,8 @@ peer_list:
     endpoints:
       - type: Tcp
         address: "127.0.0.1:9990"
+      - type: Bp
+        address: "ipn:2.1"
     color: 2
 
 room_list:

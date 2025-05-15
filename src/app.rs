@@ -3,12 +3,17 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
+use crate::utils::socket::SocketObserver;
+
+#[cfg(feature = "bp")]
 use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{
-    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
-    SocketObserver,
-};
-use chrono::{Duration, Local, Utc};
+#[cfg(feature = "bp")]
+use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket};
+
+use chrono::{Duration, Local};
+#[cfg(feature = "bp")]
+use chrono::Utc;
+
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -175,6 +180,45 @@ impl ChatApp {
             },
         };
         return app;
+    }
+    
+    #[cfg(feature = "bp")]
+    pub fn send_message_via_bp(&self, message: &str, recipient: &Peer) -> Result<(), String> {
+        let bp_endpoint = recipient.endpoints.iter()
+            .find_map(|ep| match ep {
+                Endpoint::Bp(_) => Some(ep.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| "Recipient has no BP endpoint".to_string())?;
+        
+        let mut sock = match GenericSocket::new(&bp_endpoint) {
+            Ok(s) => s,
+            Err(e) => return Err(format!("Failed to create BP socket: {}", e)),
+        };
+        
+        let local_peer = self.model_arc.lock().unwrap().localpeer.clone();
+        let now = Utc::now();
+        let chat_message = ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: local_peer,
+            text: message.to_string(),
+            shipment_status: MessageStatus::Sent(now),
+        };
+        
+        match sock.send_message(&chat_message) {
+            Ok(_) => {
+                let mut model = self.model_arc.lock().unwrap();
+                model.add_message(chat_message, MessageDirection::Sent);
+                Ok(())
+            },
+            Err(e) => Err(format!("Failed to send message: {}", e)),
+        }
+    }
+
+    #[cfg(not(feature = "bp"))]
+    pub fn send_message_via_bp(&self, _message: &str, _recipient: &Peer) -> Result<(), String> {
+        Err("BP socket support requires 'bp' feature".to_string())
     }
 }
 
