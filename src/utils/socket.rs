@@ -1,15 +1,17 @@
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
+use libc::{self, sockaddr_storage, socklen_t};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, Read, Write};
-use std::mem::MaybeUninit;
-use std::net::SocketAddr;
+use std::io::{self, Error, ErrorKind, Read, Write};
+use std::mem;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
+
+const AF_BP: u16 = 28;
 
 pub static TOKIO_RUNTIME: Lazy<Runtime> =
     Lazy::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
@@ -31,33 +33,94 @@ impl Endpoint {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+struct SockAddrBp {
+    bp_family: libc::sa_family_t, // 2 bytes
+    bp_agent_id: u8,              // 1 byte
+    _pad: [u8; 13],               // Padding to reach 16 bytes total
+}
+
+impl SockAddrBp {
+    /// Convert into a `SockAddr` using socket2's safe wrapper.
+    /// SAFETY: Must only be used if the layout and length are valid as a sockaddr.
+    fn to_sockaddr(&self) -> SockAddr {
+        // SAFETY: layout matches sockaddr, and length is correct
+        unsafe {
+            SockAddr::new(
+                mem::transmute_copy::<SockAddrBp, sockaddr_storage>(self),
+                mem::size_of::<SockAddrBp>() as socklen_t,
+            )
+        }
+    }
+}
+
+fn parse_bp_address(s: &str) -> Result<SockAddr, io::Error> {
+    let scheme = s
+        .strip_prefix("ipn:")
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "Must start with 'ipn:'"))?;
+
+    let (node_str, service_str) = scheme.split_once('.').ok_or_else(|| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            "Expected format 'ipn:node.service'",
+        )
+    })?;
+
+    let _node = node_str
+        .parse::<u64>()
+        .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node number"))?;
+
+    let service = service_str
+        .parse::<u8>()
+        .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service number"))?;
+
+    let sockaddr_c = SockAddrBp {
+        bp_family: AF_BP,
+        bp_agent_id: service,
+        _pad: [0; 13],
+    };
+    Ok(sockaddr_c.to_sockaddr())
+}
+
 pub struct GenericSocket {
     socket: Socket,
     eidpoint: Endpoint,
-    sockaddr: SocketAddr,
+    sockaddr: SockAddr,
     listening: bool,
 }
 impl GenericSocket {
     pub fn new(eid: &Endpoint) -> Result<Self, Box<dyn std::error::Error>> {
-        let address: SocketAddr = match eid {
-            Endpoint::Udp(addr) | Endpoint::Tcp(addr) => addr.parse()?,
-            Endpoint::Bp(_addr) => todo!(), // I don't expect parse()? to work, sockaddr must have an addr familly,
-        };
+        let (domain, semtype, proto, address): (Domain, Type, Protocol, SockAddr) = match eid {
+            Endpoint::Udp(addr) => {
+                let std_sock = addr.parse()?;
 
-        let socket = match eid {
-            Endpoint::Udp(_) => Socket::new(
-                Domain::for_address(address),
+                (
+                    Domain::for_address(std_sock),
+                    Type::DGRAM,
+                    Protocol::UDP,
+                    SockAddr::from(std_sock),
+                )
+            }
+            Endpoint::Tcp(addr) => {
+                let std_sock = addr.parse()?;
+                (
+                    Domain::for_address(std_sock),
+                    Type::STREAM,
+                    Protocol::TCP,
+                    SockAddr::from(std_sock),
+                )
+            }
+            Endpoint::Bp(addr) => (
+                Domain::from(28),
                 Type::DGRAM,
-                Some(Protocol::UDP),
-            )?,
-            Endpoint::Tcp(_) => Socket::new(
-                Domain::for_address(address),
-                Type::STREAM,
-                Some(Protocol::TCP),
-            )?,
-            Endpoint::Bp(_) => Socket::new(Domain::from(28), Type::DGRAM, Some(Protocol::from(0)))?,
+                Protocol::from(0),
+                parse_bp_address(addr)?,
+            ),
         };
 
+        let socket = Socket::new(domain, semtype, Some(proto))?;
         return Ok(Self {
             socket: socket,
             eidpoint: eid.clone(),
@@ -110,7 +173,7 @@ impl GenericSocket {
                 TOKIO_RUNTIME.spawn_blocking({
                     let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
                     move || {
-                        let mut buffer: [u8;1024] = [0; 1024];
+                        let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
                             match socket.read(&mut buffer) {
                                 Ok((size)) => {
