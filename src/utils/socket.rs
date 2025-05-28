@@ -138,11 +138,11 @@ impl GenericSocket {
         match self.eidpoint {
             Endpoint::Bp(_) | Endpoint::Udp(_) => {
                 self.socket
-                    .send_to(data, &SockAddr::from(self.sockaddr.clone()))?;
+                    .send_to(data, &self.sockaddr.clone())?;
             }
             Endpoint::Tcp(_) => {
                 self.socket
-                    .connect(&SockAddr::from(self.sockaddr.clone()))?;
+                    .connect(&self.sockaddr.clone())?;
                 self.socket.write_all(data)?;
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
