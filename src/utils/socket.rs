@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::{self, Error, ErrorKind, Read, Write};
-use std::mem;
+use std::{mem, ptr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
@@ -48,10 +48,15 @@ impl SockAddrBp {
     fn to_sockaddr(&self) -> SockAddr {
         // SAFETY: layout matches sockaddr, and length is correct
         unsafe {
-            SockAddr::new(
-                mem::transmute_copy::<SockAddrBp, sockaddr_storage>(self),
-                mem::size_of::<SockAddrBp>() as socklen_t,
-            )
+          let mut storage: sockaddr_storage = mem::zeroed();
+
+            // Copy self bytes into storage (only as many bytes as self has)
+            ptr::copy_nonoverlapping(
+                self as *const SockAddrBp as *const u8,
+                &mut storage as *mut sockaddr_storage as *mut u8,
+                mem::size_of::<SockAddrBp>(),
+            );
+            SockAddr::new(storage, mem::size_of::<SockAddrBp>() as socklen_t)
         }
     }
 }
