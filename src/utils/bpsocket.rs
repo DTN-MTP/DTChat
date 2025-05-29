@@ -15,6 +15,13 @@ use super::proto::{serialize_message, deserialize_message};
 
 const AF_BP: i32 = 28;
 
+// Define the proper sockaddr_bp structure to match the kernel module
+#[repr(C)]
+struct SockaddrBp {
+    bp_family: libc::sa_family_t,
+    bp_agent_id: u8,
+}
+
 #[derive(Debug)]
 pub struct BpSocket {
     fd: RawFd,
@@ -32,7 +39,6 @@ impl FromStr for BpAddress {
     type Err = io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Format: "ipn:node.service"
         if !s.starts_with("ipn:") {
             return Err(Error::new(ErrorKind::InvalidInput, "BP address must start with 'ipn:'"));
         }
@@ -67,7 +73,6 @@ impl BpSocket {
         // Parse "ipn:node.service" format to extract the local service ID
         let bp_addr = BpAddress::from_str(address)?;
         
-        // Create a socket with AF_BP family
         let fd = unsafe {
             libc::socket(AF_BP, libc::SOCK_DGRAM, 0)
         };
@@ -85,19 +90,16 @@ impl BpSocket {
     }
 
     pub fn bind(&mut self) -> io::Result<()> {
-        let mut addr = libc::sockaddr {
-            sa_family: AF_BP as libc::sa_family_t,
-            sa_data: [0; 14],
+        let addr = SockaddrBp {
+            bp_family: AF_BP as libc::sa_family_t,
+            bp_agent_id: self.local_agent_id,
         };
-        
-        // Set agent_id in the first byte of sa_data
-        addr.sa_data[0] = self.local_agent_id as i8;
         
         let bind_result = unsafe {
             libc::bind(
                 self.fd,
-                &addr as *const libc::sockaddr,
-                std::mem::size_of::<libc::sockaddr>() as libc::socklen_t,
+                &addr as *const SockaddrBp as *const libc::sockaddr,
+                std::mem::size_of::<SockaddrBp>() as libc::socklen_t,
             )
         };
         
@@ -113,22 +115,14 @@ impl BpSocket {
             return Err(Error::new(ErrorKind::InvalidInput, "Invalid BP destination address"));
         }
         
-        let mut addr = libc::sockaddr {
-            sa_family: AF_BP as libc::sa_family_t,
-            sa_data: [0; 14],
-        };
+        // Parse the destination address to get the agent_id
+        let dest_bp_addr = BpAddress::from_str(dest_addr)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("Invalid destination address: {}", e)))?;
         
-        // Copy the EID to sa_data (maximum 14 bytes, including null terminator)
-        let dest_bytes = dest_addr.as_bytes();
-        let copy_len = std::cmp::min(dest_bytes.len(), 13);
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                dest_bytes.as_ptr(),
-                addr.sa_data.as_mut_ptr() as *mut u8,
-                copy_len
-            );
-        }
-        addr.sa_data[copy_len as usize] = 0; // Null terminator
+        let addr = SockaddrBp {
+            bp_family: AF_BP as libc::sa_family_t,
+            bp_agent_id: dest_bp_addr.service_id,
+        };
         
         let sent_size = unsafe {
             libc::sendto(
@@ -136,8 +130,8 @@ impl BpSocket {
                 data.as_ptr() as *const libc::c_void,
                 data.len(),
                 0,
-                &addr as *const libc::sockaddr,
-                std::mem::size_of::<libc::sockaddr>() as libc::socklen_t,
+                &addr as *const SockaddrBp as *const libc::sockaddr,
+                std::mem::size_of::<SockaddrBp>() as libc::socklen_t,
             )
         };
         
@@ -225,20 +219,17 @@ impl SendingSocket for BpSocket {
     fn send_message(&mut self, message: &ChatMessage) -> Result<usize, Box<dyn std::error::Error>> {
         let serialized = serialize_message(message);
         
-        // Extract destination endpoint from the message recipient
-        let bp_endpoint = message.sender.endpoints.iter()
-            .find_map(|ep| match ep {
-                Endpoint::Bp(addr) => Some(addr.clone()),
-                _ => None,
-            })
-            .ok_or_else(|| Error::new(ErrorKind::NotFound, "No BP endpoint found for recipient"))?;
+        // Use the socket's endpoint (which is the destination) for sending
+        let bp_endpoint = match &self.endpoint {
+            Endpoint::Bp(addr) => addr.clone(),
+            _ => return Err(Box::new(Error::new(ErrorKind::InvalidInput, "Socket endpoint is not BP"))),
+        };
         
         let sent_size = self.send(&serialized, &bp_endpoint)?;
         Ok(sent_size)
     }
 }
 
-// BP socket factory function to be used by the socket controller
 pub fn create_bp_socket(endpoint: &Endpoint) -> Result<Box<dyn SendingSocket>, Box<dyn std::error::Error>> {
     let bp_socket = BpSocket::new(endpoint)?;
     Ok(Box::new(bp_socket))
