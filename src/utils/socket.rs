@@ -1,7 +1,7 @@
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
-use libc::{self, sockaddr_storage, socklen_t};
+use libc::{self, c_int, sockaddr_storage, socklen_t};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
 
-const AF_BP: u16 = 28;
+const AF_BP: c_int = 28;
 
 pub static TOKIO_RUNTIME: Lazy<Runtime> =
     Lazy::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
@@ -42,51 +42,31 @@ struct SockAddrBp {
     _pad: [u8; 13],               // Padding to reach 16 bytes total
 }
 
-impl SockAddrBp {
-    /// Convert into a `SockAddr` using socket2's safe wrapper.
-    /// SAFETY: Must only be used if the layout and length are valid as a sockaddr.
-    fn to_sockaddr(&self) -> SockAddr {
-        // SAFETY: layout matches sockaddr, and length is correct
-        unsafe {
-          let mut storage: sockaddr_storage = mem::zeroed();
+fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
+    let mut sockaddr_storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
 
-            // Copy self bytes into storage (only as many bytes as self has)
-            ptr::copy_nonoverlapping(
-                self as *const SockAddrBp as *const u8,
-                &mut storage as *mut sockaddr_storage as *mut u8,
-                mem::size_of::<SockAddrBp>(),
-            );
-            SockAddr::new(storage, mem::size_of::<SockAddrBp>() as socklen_t)
-        }
+    // Set the family
+    unsafe {
+        let sockaddr_ptr = &mut sockaddr_storage as *mut libc::sockaddr_storage as *mut libc::sockaddr;
+        (*sockaddr_ptr).sa_family = AF_BP as u16;
+
+        // Copy the string to sa_data (similar to your C strncpy)
+        let sa_data_ptr = (*sockaddr_ptr).sa_data.as_mut_ptr();
+        let bytes_to_copy = std::cmp::min(eid_string.len(), (*sockaddr_ptr).sa_data.len() - 1);
+
+        std::ptr::copy_nonoverlapping(
+            eid_string.as_ptr(),
+            sa_data_ptr as *mut u8,
+            bytes_to_copy,
+        );
+
+        // Null terminate
+        *((sa_data_ptr as *mut u8).add(bytes_to_copy)) = 0;
     }
-}
 
-fn parse_bp_address(s: &str) -> Result<SockAddr, io::Error> {
-    let scheme = s
-        .strip_prefix("ipn:")
-        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "Must start with 'ipn:'"))?;
-
-    let (node_str, service_str) = scheme.split_once('.').ok_or_else(|| {
-        Error::new(
-            ErrorKind::InvalidInput,
-            "Expected format 'ipn:node.service'",
-        )
-    })?;
-
-    let _node = node_str
-        .parse::<u64>()
-        .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node number"))?;
-
-    let service = service_str
-        .parse::<u8>()
-        .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service number"))?;
-
-    let sockaddr_c = SockAddrBp {
-        bp_family: AF_BP,
-        bp_agent_id: service,
-        _pad: [0; 13],
-    };
-    Ok(sockaddr_c.to_sockaddr())
+    let addr_len = mem::size_of::<libc::sockaddr>() as libc::socklen_t;
+    let address = unsafe { SockAddr::new(sockaddr_storage, addr_len) };
+    Ok(address)
 }
 
 pub struct GenericSocket {
@@ -118,10 +98,10 @@ impl GenericSocket {
                 )
             }
             Endpoint::Bp(addr) => (
-                Domain::from(28),
+                Domain::from(AF_BP),
                 Type::DGRAM,
                 Protocol::from(0),
-                parse_bp_address(addr)?,
+                create_bp_sockaddr_with_string(addr)?,
             ),
         };
 
