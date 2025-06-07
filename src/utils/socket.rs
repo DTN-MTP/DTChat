@@ -36,35 +36,33 @@ impl Endpoint {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+
 struct SockAddrBp {
     bp_family: libc::sa_family_t, // 2 bytes
-    bp_agent_id: u8,              // 1 byte
-    _pad: [u8; 13],               // Padding to reach 16 bytes total
+    eid_str: [u8; 126],           // 126 bytes - must match C struct
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
+    let mut sockaddr_bp = SockAddrBp {
+        bp_family: AF_BP as u16,
+        eid_str: [0; 126],
+    };
+
+    // Copy EID string, ensuring null termination
+    let bytes_to_copy = std::cmp::min(eid_string.len(), 125);
+    sockaddr_bp.eid_str[..bytes_to_copy].copy_from_slice(&eid_string.as_bytes()[..bytes_to_copy]);
+
+    // Convert to sockaddr_storage
     let mut sockaddr_storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
-
-    // Set the family
     unsafe {
-        let sockaddr_ptr = &mut sockaddr_storage as *mut libc::sockaddr_storage as *mut libc::sockaddr;
-        (*sockaddr_ptr).sa_family = AF_BP as u16;
-
-        // Copy the string to sa_data (similar to your C strncpy)
-        let sa_data_ptr = (*sockaddr_ptr).sa_data.as_mut_ptr();
-        let bytes_to_copy = std::cmp::min(eid_string.len(), (*sockaddr_ptr).sa_data.len() - 1);
-
         std::ptr::copy_nonoverlapping(
-            eid_string.as_ptr(),
-            sa_data_ptr as *mut u8,
-            bytes_to_copy,
+            &sockaddr_bp as *const SockAddrBp as *const u8,
+            &mut sockaddr_storage as *mut libc::sockaddr_storage as *mut u8,
+            mem::size_of::<SockAddrBp>(),
         );
-
-        // Null terminate
-        *((sa_data_ptr as *mut u8).add(bytes_to_copy)) = 0;
     }
 
-    let addr_len = mem::size_of::<libc::sockaddr>() as libc::socklen_t;
+    let addr_len = mem::size_of::<SockAddrBp>() as libc::socklen_t;
     let address = unsafe { SockAddr::new(sockaddr_storage, addr_len) };
     Ok(address)
 }
