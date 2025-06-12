@@ -1,15 +1,17 @@
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
+use libc::{self, c_int, sockaddr_storage, socklen_t};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, Read, Write};
-use std::mem::MaybeUninit;
-use std::net::SocketAddr;
+use std::io::{self, Error, ErrorKind, Read, Write};
+use std::{mem, ptr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
+
+const AF_BP: c_int = 28;
 
 pub static TOKIO_RUNTIME: Lazy<Runtime> =
     Lazy::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
@@ -31,33 +33,77 @@ impl Endpoint {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+
+struct SockAddrBp {
+    bp_family: libc::sa_family_t, // 2 bytes
+    eid_str: [u8; 126],           // 126 bytes - must match C struct
+}
+
+fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
+    let mut sockaddr_bp = SockAddrBp {
+        bp_family: AF_BP as u16,
+        eid_str: [0; 126],
+    };
+
+    // Copy EID string, ensuring null termination
+    let bytes_to_copy = std::cmp::min(eid_string.len(), 125);
+    sockaddr_bp.eid_str[..bytes_to_copy].copy_from_slice(&eid_string.as_bytes()[..bytes_to_copy]);
+
+    // Convert to sockaddr_storage
+    let mut sockaddr_storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            &sockaddr_bp as *const SockAddrBp as *const u8,
+            &mut sockaddr_storage as *mut libc::sockaddr_storage as *mut u8,
+            mem::size_of::<SockAddrBp>(),
+        );
+    }
+
+    let addr_len = mem::size_of::<SockAddrBp>() as libc::socklen_t;
+    let address = unsafe { SockAddr::new(sockaddr_storage, addr_len) };
+    Ok(address)
+}
+
 pub struct GenericSocket {
     socket: Socket,
     eidpoint: Endpoint,
-    sockaddr: SocketAddr,
+    sockaddr: SockAddr,
     listening: bool,
 }
 impl GenericSocket {
     pub fn new(eid: &Endpoint) -> Result<Self, Box<dyn std::error::Error>> {
-        let address: SocketAddr = match eid {
-            Endpoint::Udp(addr) | Endpoint::Tcp(addr) => addr.parse()?,
-            Endpoint::Bp(_addr) => todo!(), // I don't expect parse()? to work, sockaddr must have an addr familly,
-        };
+        let (domain, semtype, proto, address): (Domain, Type, Protocol, SockAddr) = match eid {
+            Endpoint::Udp(addr) => {
+                let std_sock = addr.parse()?;
 
-        let socket = match eid {
-            Endpoint::Udp(_) => Socket::new(
-                Domain::for_address(address),
+                (
+                    Domain::for_address(std_sock),
+                    Type::DGRAM,
+                    Protocol::UDP,
+                    SockAddr::from(std_sock),
+                )
+            }
+            Endpoint::Tcp(addr) => {
+                let std_sock = addr.parse()?;
+                (
+                    Domain::for_address(std_sock),
+                    Type::STREAM,
+                    Protocol::TCP,
+                    SockAddr::from(std_sock),
+                )
+            }
+            Endpoint::Bp(addr) => (
+                Domain::from(AF_BP),
                 Type::DGRAM,
-                Some(Protocol::UDP),
-            )?,
-            Endpoint::Tcp(_) => Socket::new(
-                Domain::for_address(address),
-                Type::STREAM,
-                Some(Protocol::TCP),
-            )?,
-            Endpoint::Bp(_) => Socket::new(Domain::from(28), Type::DGRAM, Some(Protocol::from(0)))?,
+                Protocol::from(0),
+                create_bp_sockaddr_with_string(addr)?,
+            ),
         };
 
+        let socket = Socket::new(domain, semtype, Some(proto))?;
         return Ok(Self {
             socket: socket,
             eidpoint: eid.clone(),
@@ -70,11 +116,11 @@ impl GenericSocket {
         match self.eidpoint {
             Endpoint::Bp(_) | Endpoint::Udp(_) => {
                 self.socket
-                    .send_to(data, &SockAddr::from(self.sockaddr.clone()))?;
+                    .send_to(data, &self.sockaddr.clone())?;
             }
             Endpoint::Tcp(_) => {
                 self.socket
-                    .connect(&SockAddr::from(self.sockaddr.clone()))?;
+                    .connect(&self.sockaddr.clone())?;
                 self.socket.write_all(data)?;
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
@@ -110,7 +156,7 @@ impl GenericSocket {
                 TOKIO_RUNTIME.spawn_blocking({
                     let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
                     move || {
-                        let mut buffer: [u8;1024] = [0; 1024];
+                        let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
                             match socket.read(&mut buffer) {
                                 Ok((size)) => {

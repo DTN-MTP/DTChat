@@ -32,63 +32,66 @@ fn main() -> Result<(), eframe::Error> {
         shared_rooms.clone(),
     );
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: local_peer.clone(),
-        text: "Hello from local peer".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
-    });
+    #[cfg(feature = "dev")]
+    {
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: local_peer.clone(),
+            text: "Hello from local peer".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+        });
 
-    now += Duration::seconds(2);
+        now += Duration::seconds(2);
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: shared_peers[2].clone(),
-        text: "Bob at your service !".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(30)),
-    });
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: shared_peers[2].clone(),
+            text: "Bob at your service !".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(30)),
+        });
 
-    now += Duration::seconds(1);
+        now += Duration::seconds(1);
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: shared_peers[0].clone(),
-        text: "Hello local peer, how are you?".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
-    });
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: shared_peers[0].clone(),
+            text: "Hello local peer, how are you?".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+        });
 
-    now += Duration::seconds(2);
+        now += Duration::seconds(2);
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: shared_peers[0].clone(),
-        text: "I'm john does".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
-    });
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: shared_peers[0].clone(),
+            text: "I'm john does".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+        });
 
-    now += Duration::seconds(13);
+        now += Duration::seconds(13);
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: local_peer.clone(),
-        text: "Hello john doe, Some news from alice ?".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
-    });
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: local_peer.clone(),
+            text: "Hello john doe, Some news from alice ?".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(10)),
+        });
 
-    now += Duration::seconds(5);
+        now += Duration::seconds(5);
 
-    model.messages.push(ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: shared_peers[1].clone(),
-        text: "Sorry, I'm a bit late!".to_owned(),
-        shipment_status: MessageStatus::Received(now, now + Duration::seconds(12)),
-    });
+        model.messages.push(ChatMessage {
+            uuid: generate_uuid(),
+            response: None,
+            sender: shared_peers[1].clone(),
+            text: "Sorry, I'm a bit late!".to_owned(),
+            shipment_status: MessageStatus::Received(now, now + Duration::seconds(12)),
+        });
+    }
 
     let model_arc = Arc::new(Mutex::new(model));
 
