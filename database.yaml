@@ -7,7 +7,7 @@ local_peer:
     - type: Tcp
       address: "127.0.0.1:7001"
     - type: Bp
-      address: "ipn:10.2"
+      address: "PLACEHOLDER_BP_ADDR"
   color: 3
 # This is a local peer with multiple endpoints
 
@@ -34,10 +34,17 @@ peer_list:
     color: 2
 
   - uuid: 3
-    name: marius
+    name: ipn10
     endpoints:
       - type: Bp
-        address: "ipn:20.2"
+        address: "ipn:10.1"
+    color: 2
+
+  - uuid: 3
+    name: ipn30
+    endpoints:
+      - type: Bp
+        address: "ipn:30.1"
     color: 2
 
 room_list:
