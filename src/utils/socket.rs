@@ -24,19 +24,6 @@ pub enum Endpoint {
     Bp(String),
 }
 
-impl Endpoint {
-    pub fn to_string(&self) -> String {
-        match self {
-            Endpoint::Udp(s) => s.clone(),
-            Endpoint::Tcp(s) => s.clone(),
-            Endpoint::Bp(s) => s.clone(),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-
 struct SockAddrBp {
     bp_family: libc::sa_family_t, // 2 bytes
     eid_str: [u8; 126],           // 126 bytes - must match C struct
@@ -74,12 +61,12 @@ pub struct GenericSocket {
     sockaddr: SockAddr,
     listening: bool,
 }
+
 impl GenericSocket {
     pub fn new(eid: &Endpoint) -> Result<Self, Box<dyn std::error::Error>> {
         let (domain, semtype, proto, address): (Domain, Type, Protocol, SockAddr) = match eid {
             Endpoint::Udp(addr) => {
                 let std_sock = addr.parse()?;
-
                 (
                     Domain::for_address(std_sock),
                     Type::DGRAM,
@@ -105,35 +92,26 @@ impl GenericSocket {
         };
 
         let socket = Socket::new(domain, semtype, Some(proto))?;
-        return Ok(Self {
-            socket: socket,
+        Ok(Self {
+            socket,
             eidpoint: eid.clone(),
             sockaddr: address,
             listening: false,
-        });
+        })
     }
 
     pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
         match self.eidpoint {
             Endpoint::Bp(_) | Endpoint::Udp(_) => {
-                self.socket
-                    .send_to(data, &self.sockaddr.clone())?;
+                self.socket.send_to(data, &self.sockaddr)?;
             }
             Endpoint::Tcp(_) => {
-                self.socket
-                    .connect(&self.sockaddr.clone())?;
+                self.socket.connect(&self.sockaddr)?;
                 self.socket.write_all(data)?;
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
             }
-            _ => {
-                return Err(Box::new(Error::new(
-                    std::io::ErrorKind::Unsupported,
-                    "Unsupported socket type",
-                )))
-            }
         }
-
         Ok(())
     }
 
@@ -148,35 +126,28 @@ impl GenericSocket {
 
         self.socket.set_nonblocking(true)?;
         self.socket.set_reuse_address(true)?;
-        self.socket.bind(&SockAddr::from(self.sockaddr.clone()))?;
+        self.socket.bind(&self.sockaddr)?;
 
         match &self.eidpoint {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
                 let address = addr.clone();
-
                 TOKIO_RUNTIME.spawn_blocking({
-                    let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
+                    let mut socket = self.socket.try_clone()?;
                     move || {
                         let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
                             match socket.read(&mut buffer) {
-                                Ok((size)) => {
-                                    println!(
-                                        "UDP/BP received data on listening address {}",
-                                        address
-                                    );
+                                Ok(size) => {
+                                    println!("UDP/BP received data on listening address {}", address);
                                     
-                                    // ✅ FIX: Copy buffer data before async processing
                                     let data_copy = buffer[..size].to_vec();
-                                    let new_controller_arc = Arc::clone(&controller_arc);
+                                    let controller_clone = Arc::clone(&controller_arc);
                                     
                                     TOKIO_RUNTIME.spawn(async move {
-                                        let controller = new_controller_arc.lock().unwrap();
+                                        let controller = controller_clone.lock().unwrap();
                                         let peers = controller.get_peers();
 
-                                        if let Some(message) =
-                                            deserialize_message(&data_copy, &peers)
-                                        {
+                                        if let Some(message) = deserialize_message(&data_copy, &peers) {
                                             controller.notify_observers(message);
                                         }
                                     });
@@ -197,15 +168,14 @@ impl GenericSocket {
                 let address = addr.clone();
                 self.socket.listen(128)?;
                 TOKIO_RUNTIME.spawn_blocking({
-                    let socket = self.socket.try_clone()?; // Clone for async thread
+                    let socket = self.socket.try_clone()?;
                     move || loop {
                         match socket.accept() {
                             Ok((stream, _peer)) => {
                                 println!("TCP received data on listening address {}", address);
-                                let new_controller_arc = Arc::clone(&controller_arc);
-
+                                let controller_clone = Arc::clone(&controller_arc);
                                 TOKIO_RUNTIME.spawn(async move {
-                                    handle_tcp_connection(stream.into(), new_controller_arc).await;
+                                    handle_tcp_connection(stream.into(), controller_clone).await;
                                 });
                             }
                             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -220,7 +190,6 @@ impl GenericSocket {
                 });
             }
         }
-
         Ok(())
     }
 }
@@ -232,11 +201,9 @@ async fn handle_tcp_connection(
     let mut buffer = [0; 1024];
     match stream.read(&mut buffer) {
         Ok(size) => {
-            let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
-
-            if let Some(message) = deserialize_message(buffer_slice, &peers) {
+            if let Some(message) = deserialize_message(&buffer[..size], &peers) {
                 controller.notify_observers(message);
             }
         }
@@ -288,11 +255,8 @@ impl DefaultSocketController {
     }
 
     fn notify_observers(&self, message: ChatMessage) {
-        let observers_clone = self.observers.clone();
-        let message_clone = message.clone();
-
-        for observer in observers_clone {
-            observer.on_socket_event(message_clone.clone());
+        for observer in &self.observers {
+            observer.on_socket_event(message.clone());
         }
     }
 
@@ -315,7 +279,6 @@ impl DefaultSocketController {
                 }
                 Err(e) => {
                     eprintln!("Failed to create socket for {:?}: {}", endpoint, e);
-                    // Continue - don't crash the app
                 }
             }
         }
