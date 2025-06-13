@@ -37,15 +37,23 @@ peer_list:
     name: ipn10
     endpoints:
       - type: Bp
-        address: "ipn:10.1"
+        address: "ipn:10.2"
     color: 2
 
   - uuid: 4
     name: ipn30
     endpoints:
       - type: Bp
-        address: "ipn:30.1"
+        address: "ipn:30.2"
     color: 2
+
+  - uuid: 5
+    name: ud3tn
+    endpoints:
+      - type: Bp
+        address: "ipn:20.2"
+    color: 2
+
 
 room_list:
   - uuid: 0
