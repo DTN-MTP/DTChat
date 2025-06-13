@@ -149,17 +149,17 @@ impl GenericSocket {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
                 let address = addr.clone();
 
-                {
-                    let controller = controller_arc.lock().unwrap();
-                    let mut socket_clone = self.socket.try_clone()?;
-                    controller.check_pending_messages(&mut socket_clone, &address);
-                }
-
                 TOKIO_RUNTIME.spawn_blocking({
                     let mut socket = self.socket.try_clone()?;
                     let controller_clone = Arc::clone(&controller_arc);
                     move || {
                         let mut buffer: [u8; 8192] = [0; 8192];
+                        
+                        {
+                            let controller = controller_clone.lock().unwrap();
+                            controller.check_pending_messages(&mut socket, &address);
+                        }
+                        
                         loop {
                             match socket.read(&mut buffer) {
                                 Ok(size) => {
@@ -275,7 +275,7 @@ impl DefaultSocketController {
         }
     }
 
-    // Handle incoming message data consistently
+    // New method: Handle incoming message data consistently
     pub fn handle_incoming_data(&self, buffer: &[u8], size: usize, source: &str) {
         if size > 0 {
             println!("Received data from {}: {} bytes", source, size);
@@ -286,7 +286,7 @@ impl DefaultSocketController {
         }
     }
 
-    // Check for pending messages on startup
+    // New method: Check for pending messages on startup
     pub fn check_pending_messages(&self, socket: &mut Socket, endpoint_addr: &str) {
         let mut buffer: [u8; 8192] = [0; 8192];
         match socket.read(&mut buffer) {
@@ -309,8 +309,17 @@ impl DefaultSocketController {
         let controller_arc = Arc::new(Mutex::new(controller));
 
         for endpoint in &local_peer.endpoints {
-            let mut sock = GenericSocket::new(endpoint).unwrap();
-            sock.start_listener(controller_arc.clone())?;
+            match GenericSocket::new(endpoint) {
+                Ok(mut sock) => {
+                    if let Err(e) = sock.start_listener(controller_arc.clone()) {
+                        eprintln!("Failed to start listener for {:?}: {}", endpoint, e);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to create socket for {:?}: {}", endpoint, e);
+                    // Continue with other endpoints instead of crashing
+                }
+            }
         }
 
         Ok(controller_arc)
