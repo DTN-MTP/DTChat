@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use chrono_tz::Asia::Tokyo;
 
 use super::config::Peer;
 
@@ -21,17 +22,20 @@ impl ChatMessage {
     pub fn get_shipment_status_str(&self) -> String {
         match &self.shipment_status {
             MessageStatus::Sent(tx) => {
+                let jst_tx = tx.with_timezone(&Tokyo);
                 format!(
                     "[{}->?][{}]",
-                    tx.format("%H:%M:%S").to_string(),
+                    jst_tx.format("%H:%M:%S").to_string(),
                     self.sender.name
                 )
             }
             MessageStatus::Received(tx, rx) => {
+                let jst_tx = tx.with_timezone(&Tokyo);
+                let jst_rx = rx.with_timezone(&Tokyo);
                 format!(
                     "[{}->{}][{}]",
-                    tx.format("%H:%M:%S").to_string(),
-                    rx.format("%H:%M:%S").to_string(),
+                    jst_tx.format("%H:%M:%S").to_string(),
+                    jst_rx.format("%H:%M:%S").to_string(),
                     self.sender.name
                 )
             }

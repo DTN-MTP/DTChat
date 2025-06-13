@@ -3,12 +3,9 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{
-    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
-    SocketObserver,
-};
-use chrono::{Duration, Local, Utc};
+use crate::utils::socket::{SocketObserver};
+use chrono::{Duration, Utc};
+use chrono_tz::Asia::Tokyo;
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -158,6 +155,7 @@ pub struct ChatApp {
 impl ChatApp {
     pub fn new(model_arc: Arc<Mutex<ChatModel>>, handler_arc: Arc<Mutex<EventHandler>>) -> Self {
         let forging_receiver = model_arc.lock().unwrap().peers[0].clone();
+        let now_jst = Utc::now().with_timezone(&Tokyo);
         let app = Self {
             model_arc: model_arc,
             handler_arc: handler_arc,
@@ -166,8 +164,8 @@ impl ChatApp {
                 message_view: RoomView::default(),
                 create_modal_open: false,
                 message_to_send: String::new(),
-                forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
-                forging_rx_time: (Local::now() + Duration::hours(1))
+                forging_tx_time: now_jst.format("%H:%M:%S").to_string(),
+                forging_rx_time: (now_jst + Duration::hours(1))
                     .format("%H:%M:%S")
                     .to_string(),
                 forging_receiver,
@@ -201,6 +199,7 @@ impl ModelObserver for EventHandler {
     fn on_event(&mut self, event: AppEvent) {
         match &event {
             AppEvent::MessageReceived(_message) => self.ctx.request_repaint(),
+            AppEvent::MessageSent(_message) => self.ctx.request_repaint(),
             _ => (),
         }
 

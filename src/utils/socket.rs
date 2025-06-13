@@ -1,11 +1,11 @@
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
-use libc::{self, c_int, sockaddr_storage, socklen_t};
+use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::io::{self, Error, Read, Write};
 use std::{mem, ptr};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -127,12 +127,6 @@ impl GenericSocket {
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
             }
-            _ => {
-                return Err(Box::new(Error::new(
-                    std::io::ErrorKind::Unsupported,
-                    "Unsupported socket type",
-                )))
-            }
         }
 
         Ok(())
@@ -155,35 +149,30 @@ impl GenericSocket {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
                 let address = addr.clone();
 
+                // Check for pending messages on startup using the controller method
+                {
+                    let controller = controller_arc.lock().unwrap();
+                    let mut socket_clone = self.socket.try_clone()?;
+                    controller.check_pending_messages(&mut socket_clone, &address);
+                }
+
                 TOKIO_RUNTIME.spawn_blocking({
-                    let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
+                    let mut socket = self.socket.try_clone()?;
+                    let controller_clone = Arc::clone(&controller_arc);
                     move || {
-                        let mut buffer: [u8; 1024] = [0; 1024];
+                        let mut buffer: [u8; 8192] = [0; 8192];
                         loop {
                             match socket.read(&mut buffer) {
-                                Ok((size)) => {
-                                    println!(
-                                        "UDP/BP received data on listening address {}",
-                                        address
-                                    );
-                                    let new_controller_arc = Arc::clone(&controller_arc);
-                                    TOKIO_RUNTIME.spawn(async move {
-                                        let controller = new_controller_arc.lock().unwrap();
-                                        let peers = controller.get_peers();
-
-                                        if let Some(message) =
-                                            deserialize_message(&buffer[..size], &peers)
-                                        {
-                                            controller.notify_observers(message);
-                                        }
-                                    });
+                                Ok(size) => {
+                                    let controller = controller_clone.lock().unwrap();
+                                    controller.handle_incoming_data(&buffer, size, &address);
                                 }
                                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                                    thread::sleep(std::time::Duration::from_millis(10));
+                                    thread::sleep(std::time::Duration::from_millis(100));
                                 }
                                 Err(e) => {
-                                    eprintln!("UDP Error: {}", e);
-                                    break;
+                                    eprintln!("Socket Error on {}: {}", address, e);
+                                    thread::sleep(std::time::Duration::from_millis(1000));
                                 }
                             }
                         }
@@ -194,23 +183,22 @@ impl GenericSocket {
                 let address = addr.clone();
                 self.socket.listen(128)?;
                 TOKIO_RUNTIME.spawn_blocking({
-                    let socket = self.socket.try_clone()?; // Clone for async thread
+                    let socket = self.socket.try_clone()?;
+                    let controller_clone = Arc::clone(&controller_arc);
                     move || loop {
                         match socket.accept() {
                             Ok((stream, _peer)) => {
-                                println!("TCP received data on listening address {}", address);
-                                let new_controller_arc = Arc::clone(&controller_arc);
-
+                                let controller_for_connection = Arc::clone(&controller_clone);
                                 TOKIO_RUNTIME.spawn(async move {
-                                    handle_tcp_connection(stream.into(), new_controller_arc).await;
+                                    handle_tcp_connection(stream.into(), controller_for_connection).await;
                                 });
                             }
                             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                                thread::sleep(std::time::Duration::from_millis(10));
+                                thread::sleep(std::time::Duration::from_millis(100));
                             }
                             Err(e) => {
-                                eprintln!("TCP Error: {}", e);
-                                break;
+                                eprintln!("TCP Socket Error on {}: {}", address, e);
+                                thread::sleep(std::time::Duration::from_millis(1000));
                             }
                         }
                     }
@@ -226,19 +214,14 @@ async fn handle_tcp_connection(
     mut stream: std::net::TcpStream,
     controller_arc: Arc<Mutex<DefaultSocketController>>,
 ) {
-    let mut buffer = [0; 1024];
+    let mut buffer = [0; 8192];
     match stream.read(&mut buffer) {
         Ok(size) => {
-            let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
-            let peers = controller.get_peers();
-
-            if let Some(message) = deserialize_message(buffer_slice, &peers) {
-                controller.notify_observers(message);
-            }
+            controller.handle_incoming_data(&buffer, size, "tcp-connection");
         }
         Err(e) => {
-            eprintln!("TCP Read Error: {}", e);
+            eprintln!("TCP Connection Read Error: {}", e);
         }
     }
 }
@@ -290,6 +273,29 @@ impl DefaultSocketController {
 
         for observer in observers_clone {
             observer.on_socket_event(message_clone.clone());
+        }
+    }
+
+    // New method: Handle incoming message data consistently
+    pub fn handle_incoming_data(&self, buffer: &[u8], size: usize, source: &str) {
+        if size > 0 {
+            println!("Received data from {}: {} bytes", source, size);
+            let peers = self.get_peers();
+            if let Some(message) = deserialize_message(&buffer[..size], &peers) {
+                self.notify_observers(message);
+            }
+        }
+    }
+
+    // New method: Check for pending messages on startup
+    pub fn check_pending_messages(&self, socket: &mut Socket, endpoint_addr: &str) {
+        let mut buffer: [u8; 8192] = [0; 8192];
+        match socket.read(&mut buffer) {
+            Ok(size) => {
+                self.handle_incoming_data(&buffer, size, &format!("startup-{}", endpoint_addr));
+            }
+            Err(_) => {
+            }
         }
     }
 

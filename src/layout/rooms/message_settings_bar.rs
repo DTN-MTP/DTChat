@@ -73,6 +73,11 @@ impl MessageSettingsBar {
             });
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui.button("Refresh Messages").clicked() {
+                    // Trigger a manual refresh of pending messages
+                    let ctx = ui.ctx().clone();
+                    ctx.request_repaint();
+                }
                 if ui.button("New Room").clicked() {
                     app.message_panel.create_modal_open = true;
                 }

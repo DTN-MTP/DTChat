@@ -7,8 +7,6 @@ use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
-    message::{ChatMessage, MessageStatus},
-    proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
 };
 
@@ -24,9 +22,9 @@ fn main() -> Result<(), eframe::Error> {
     let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
 
-    let mut now = Utc::now() - Duration::seconds(40);
+    let _now = Utc::now() - Duration::seconds(40);
 
-    let mut model = ChatModel::new(
+    let model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),

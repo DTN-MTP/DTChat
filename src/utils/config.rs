@@ -27,12 +27,16 @@ impl Default for Peer {
 
 impl Peer {
     pub fn get_color(&self) -> egui::Color32 {
-        let color_id = self.color % 4;
+        let color_id = self.color % 8;
         match color_id {
             0 => egui::Color32::GREEN,
             1 => egui::Color32::RED,
             2 => egui::Color32::BLUE,
             3 => egui::Color32::YELLOW,
+            4 => egui::Color32::WHITE,
+            5 => egui::Color32::LIGHT_GRAY,
+            6 => egui::Color32::from_rgb(255, 255, 255), // Pure white
+            7 => egui::Color32::from_rgb(240, 240, 240), // Off-white
             _ => egui::Color32::WHITE,
         }
     }

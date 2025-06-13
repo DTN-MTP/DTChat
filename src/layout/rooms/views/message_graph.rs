@@ -1,7 +1,8 @@
 use std::{collections::HashMap, ops::RangeInclusive};
 
 use crate::app::ChatApp;
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
+use chrono_tz::Asia::Tokyo;
 use egui::{Color32, Vec2b};
 use egui_plot::{AxisHints, BoxElem, BoxPlot, BoxSpread, GridMark, Legend, Plot, VLine};
 pub struct MessageGraphView {}
@@ -25,15 +26,16 @@ pub fn ts_to_str(
     time: bool,
     separator: Option<String>,
 ) -> String {
+    let jst_datetime = datetime.with_timezone(&Tokyo);
     let mut res = "".to_string();
     if date {
-        res += &datetime.format("%Y-%m-%d").to_string();
+        res += &jst_datetime.format("%Y-%m-%d").to_string();
     }
     if let Some(sep) = separator {
         res += &sep;
     }
     if time {
-        res += &datetime.format("%H:%M:%S").to_string()
+        res += &jst_datetime.format("%H:%M:%S").to_string()
     }
     return res;
 }
@@ -44,7 +46,8 @@ impl MessageGraphView {
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
-        let now = Local::now().timestamp_millis() as f64;
+        let now_jst = Utc::now().with_timezone(&Tokyo);
+        let now = now_jst.timestamp_millis() as f64;
         // + Local::now().timestamp_subsec_millis() as f64 / 1000.0;
 
         let locked_model = app.model_arc.lock().unwrap();
