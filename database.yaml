@@ -40,7 +40,7 @@ peer_list:
         address: "ipn:10.1"
     color: 2
 
-  - uuid: 3
+  - uuid: 4
     name: ipn30
     endpoints:
       - type: Bp
