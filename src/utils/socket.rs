@@ -149,7 +149,6 @@ impl GenericSocket {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
                 let address = addr.clone();
 
-                // Check for pending messages on startup using the controller method
                 {
                     let controller = controller_arc.lock().unwrap();
                     let mut socket_clone = self.socket.try_clone()?;
@@ -276,7 +275,7 @@ impl DefaultSocketController {
         }
     }
 
-    // New method: Handle incoming message data consistently
+    // Handle incoming message data consistently
     pub fn handle_incoming_data(&self, buffer: &[u8], size: usize, source: &str) {
         if size > 0 {
             println!("Received data from {}: {} bytes", source, size);
@@ -287,7 +286,7 @@ impl DefaultSocketController {
         }
     }
 
-    // New method: Check for pending messages on startup
+    // Check for pending messages on startup
     pub fn check_pending_messages(&self, socket: &mut Socket, endpoint_addr: &str) {
         let mut buffer: [u8; 8192] = [0; 8192];
         match socket.read(&mut buffer) {
