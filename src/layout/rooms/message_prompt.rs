@@ -98,11 +98,7 @@ impl MessagePrompt {
                     response: None,
                     sender: model_clone.lock().unwrap().localpeer.clone(),
                     text: message_text.clone(),
-                    shipment_status: if pbat_enabled {
-                        MessageStatus::Pbat(Utc::now(), Utc::now())
-                    } else {
-                        MessageStatus::Sent(Utc::now())
-                    },
+                    shipment_status: MessageStatus::Sent(Utc::now())
                 };
 
                 TOKIO_RUNTIME.spawn_blocking(move || {
