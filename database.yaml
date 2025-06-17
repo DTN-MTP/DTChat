@@ -1,3 +1,4 @@
+a_sabr : "../host2.rc"
 local_peer:
   uuid: 3
   name: local peer
