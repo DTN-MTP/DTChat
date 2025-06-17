@@ -9,17 +9,13 @@ use crate::utils::socket::{GenericSocket, SendingSocket, TOKIO_RUNTIME};
 use chrono::Utc;
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
+use libc::UTIME_NOW;
 
-pub struct MessagePrompt {}
+pub struct MessagePrompt {
+    pbat_enabled : bool,
+}
 
-pub fn manage_send(model: Arc<Mutex<ChatModel>>, text: &str, receiver: Peer) {
-    let msg = ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: model.lock().unwrap().localpeer.clone(),
-        text: text.to_string(),
-        shipment_status: MessageStatus::Sent(Utc::now()),
-    };
+pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg : ChatMessage, pbat_enabled : bool) {
 
     let socket = GenericSocket::new(&receiver.endpoints[0]);
 
@@ -45,7 +41,9 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, text: &str, receiver: Peer) {
 
 impl MessagePrompt {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            pbat_enabled: false,
+        }
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
@@ -62,7 +60,6 @@ impl MessagePrompt {
                 }
                 _ => true,
             });
-
         ui.add_space(4.0);
         let mut send_message = false;
         ui.horizontal(|ui| {
@@ -95,8 +92,21 @@ impl MessagePrompt {
                 let message_text = app.message_panel.message_to_send.clone();
                 let model_clone = app.model_arc.clone();
                 let receiver_clone = forging_receiver.clone();
+
+                let msg = ChatMessage {
+                    uuid: generate_uuid(),
+                    response: None,
+                    sender: model_clone.lock().unwrap().localpeer.clone(),
+                    text: message_text.clone(),
+                    shipment_status: if pbat_enabled {
+                        MessageStatus::Pbat(Utc::now(), Utc::now())
+                    } else {
+                        MessageStatus::Sent(Utc::now())
+                    },
+                };
+
                 TOKIO_RUNTIME.spawn_blocking(move || {
-                    manage_send(model_clone, &message_text, receiver_clone);
+                    manage_send(model_clone, msg,receiver_clone);
                 });
 
                 app.message_panel.message_to_send.clear();
