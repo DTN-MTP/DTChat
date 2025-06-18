@@ -91,14 +91,13 @@ impl NetworkConfig {
         let current_time = 0.0;
         let excluded_nodes = vec![];
 
-        // ✅ Lock the mutex to get mutable access
         let mut router = self.router.lock().unwrap();
         match router.route(bundle.source, &bundle, current_time, &excluded_nodes) {
             Some(routing_output) => {
-                println!("✅ Route found from ION {} to ION {}!", source_ion, dest_ion);
+                println!("Route found from ION {} to ION {}!", source_ion, dest_ion);
                 for (_contact_ptr, (contact, route_stages)) in &routing_output.first_hops {
                     let contact_borrowed: std::cell::Ref<'_, Contact<NoManagement, EVLManager>> = contact.as_ref().borrow();
-                    println!("📡 First hop: Contact {} -> {} (Start: {}, End: {})",
+                    println!("First hop: Contact {} -> {} (Start: {}, End: {})",
                         contact_borrowed.info.tx_node,
                         contact_borrowed.info.rx_node,
                         contact_borrowed.info.start,
@@ -111,7 +110,7 @@ impl NetworkConfig {
                 Ok(true)
             }
             None => {
-                println!("❌ No route found from ION {} to ION {}", source_ion, dest_ion);
+                println!("No route found from ION {} to ION {}", source_ion, dest_ion);
                 Ok(false)
             }
         }
