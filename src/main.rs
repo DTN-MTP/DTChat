@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::path::Path;
 mod app;
 mod layout;
 mod utils;
@@ -10,6 +11,7 @@ use utils::{
     message::{ChatMessage, MessageStatus},
     proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
+    network_config::NetworkConfig,
 };
 
 #[derive(Clone)]
@@ -23,13 +25,27 @@ fn main() -> Result<(), eframe::Error> {
     let shared_peers = config.peer_list;
     let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
+    let contact_plan = config.a_sabr;
+
+    if !Path::new(&contact_plan).exists(){
+        eprintln!("Contact plan missing !!!");
+    }
 
     let mut now = Utc::now() - Duration::seconds(40);
+
+    let network_config = match NetworkConfig::new(&contact_plan) {
+        Ok(config) => Some(config),
+        Err(e) => {
+            eprintln!("Failed to create NetworkConfig: {}", e);
+            None
+        }
+    };
 
     let mut model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),
+        network_config
     );
 
     #[cfg(feature = "dev")]

@@ -1,6 +1,7 @@
 use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
+use crate::utils::network_config::NetworkConfig;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::proto::generate_uuid;
@@ -68,6 +69,7 @@ pub struct ChatModel {
     pub rooms: Vec<Room>,
     pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
+    pub network_config : Option<NetworkConfig>
 }
 
 pub enum MessageDirection {
@@ -76,7 +78,7 @@ pub enum MessageDirection {
 }
 
 impl ChatModel {
-    pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>) -> Self {
+    pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>,  network_config: Option<NetworkConfig>) -> Self {
         Self {
             sort_strategy: SortStrategy::Standard,
             localpeer,
@@ -84,6 +86,7 @@ impl ChatModel {
             rooms,
             messages: Vec::new(),
             observers: Vec::new(),
+            network_config
         }
     }
 
