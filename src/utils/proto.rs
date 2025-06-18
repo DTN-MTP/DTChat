@@ -112,11 +112,11 @@ fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Opt
             );
             (ack_text, None)
         }
-        dtchat::chat_message::Content::File(_) => (
+        Content::File(_) => (
             "File transfer (not implemented for display)".to_string(),
             None,
         ),
-        dtchat::chat_message::Content::Presence(_) => (
+        Content::Presence(_) => (
             "Presence update (not implemented for display)".to_string(),
             None,
         ),

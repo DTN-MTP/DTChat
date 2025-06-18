@@ -1,3 +1,4 @@
+use crate::utils::ack;
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
@@ -297,27 +298,20 @@ impl DefaultSocketController {
         self.local_peer = Some(peer);
     }
 
-    /// Sends an ACK message if the received message requires acknowledgment
     pub fn send_ack_if_needed(&self, message: &ChatMessage) {
-        // Skip if it's already an ACK message to avoid infinite ACK loops
         if message.text.starts_with("[ACK]") {
             return;
         }
 
-        // Check if we have a local peer to send from
         if let Some(local_peer) = &self.local_peer {
-            // Get available endpoints from the local peer
             if local_peer.endpoints.is_empty() {
                 return;
             }
 
-            // Clone message for use in async context
             let msg_clone = message.clone();
             let peer_clone = local_peer.clone();
 
-            // Using non-blocking ACK sending to avoid issues with Send trait
-            // This is safer than using a blocking spawn with error handling
-            crate::utils::ack::send_ack_message_non_blocking(
+            ack::send_ack_message_non_blocking(
                 &msg_clone,
                 &mut match GenericSocket::new(&peer_clone.endpoints[0]) {
                     Ok(socket) => socket,

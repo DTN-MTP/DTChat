@@ -8,11 +8,8 @@ use crate::utils::proto::dtchat::DeliveryStatus;
 use crate::utils::proto::{dtchat, generate_uuid};
 use crate::utils::socket::{self, GenericSocket};
 
-/// Configuration for ACK message handling
 pub struct AckConfig {
-    /// Whether to delay sending ACK messages (controlled by the feature flag)
     pub delay_enabled: bool,
-    /// The delay duration in milliseconds before sending an ACK
     pub delay_duration_ms: u64,
 }
 
@@ -31,18 +28,13 @@ impl Default for AckConfig {
     }
 }
 
-/// Result type for ACK operations
 pub type AckResult<T> = Result<T, AckError>;
 
-/// Error type for ACK operations
 #[derive(Debug)]
 pub enum AckError {
-    /// Network-related errors
     Network(Box<dyn std::error::Error + Send + Sync>),
-    /// Serialization errors
     Serialization(String),
-    /// Invalid message format
-    InvalidMessage(String),
+    InvalidMessage(String), // Invalid message format
 }
 
 impl std::fmt::Display for AckError {
@@ -57,7 +49,6 @@ impl std::fmt::Display for AckError {
 
 impl std::error::Error for AckError {}
 
-/// Creates a delivery status (ACK) message for a received message
 pub fn create_ack_message(received_msg: &ChatMessage, is_read: bool) -> dtchat::ChatMessage {
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
@@ -82,22 +73,18 @@ pub async fn send_ack_message(
 ) -> AckResult<()> {
     let config = config.unwrap_or_default();
 
-    // If delayed_ack feature is enabled and delay is configured, wait before sending
     if config.delay_enabled {
         sleep(Duration::from_millis(config.delay_duration_ms)).await;
     }
 
     let ack_proto_msg = create_ack_message(received_msg, is_read);
 
-    // Serialize the protobuf message
     let mut buf = bytes::BytesMut::with_capacity(ack_proto_msg.encoded_len());
 
-    // Handle encoding errors
     if let Err(e) = prost::Message::encode(&ack_proto_msg, &mut buf) {
         return Err(AckError::Serialization(e.to_string()));
     }
 
-    // Send the ACK message and handle any network errors
     match socket.send(&buf.freeze()) {
         Ok(_) => Ok(()),
         Err(e) => Err(AckError::Network(e)),
@@ -110,11 +97,9 @@ pub fn send_ack_message_non_blocking(
     is_read: bool,
     config: Option<AckConfig>,
 ) {
-    // Clone necessary data for the async task
     let msg_clone = received_msg.clone();
     let mut socket_clone = socket.clone();
 
-    // Spawn a new task to handle the ACK sending
     socket::TOKIO_RUNTIME.spawn(async move {
         if let Err(e) = send_ack_message(&msg_clone, &mut socket_clone, is_read, config).await {
             eprintln!("Failed to send ACK message: {}", e);
