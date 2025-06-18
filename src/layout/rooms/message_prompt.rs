@@ -60,7 +60,6 @@ impl MessagePrompt {
                     app.message_panel.send_status = Some(msg.clone());
                     false
                 }
-                _ => true,
             });
 
         ui.add_space(4.0);

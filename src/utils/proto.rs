@@ -58,16 +58,6 @@ fn default_peer() -> Peer {
     Peer::default()
 }
 
-pub fn create_message(text: &str, sender: Peer) -> ChatMessage {
-    ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender,
-        text: text.to_string(),
-        shipment_status: MessageStatus::Received(Utc::now(), Utc::now()),
-    }
-}
-
 pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
@@ -83,7 +73,7 @@ fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
             content: message.text.clone(),
             reply_to_uuid: message.response.clone(),
         };
-        Some(dtchat::chat_message::Content::Text(text_message))
+        Some(Content::Text(text_message))
     };
 
     dtchat::ChatMessage {
@@ -103,14 +93,33 @@ fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Opt
 
     let content = proto.content.clone()?;
 
-    let text = match &content {
-        dtchat::chat_message::Content::Text(text_msg) => text_msg.content.clone(),
-        _ => return None,
-    };
+    // Extract text based on the message type
+    let (text, reply_to) = match &content {
+        Content::Text(text_msg) => (text_msg.content.clone(), text_msg.reply_to_uuid.clone()),
+        Content::Delivery(delivery_status) => {
+            // Format ACK message for visualization
+            let status_type = if delivery_status.read {
+                "READ"
+            } else if delivery_status.received {
+                "RECEIVED"
+            } else {
+                "UNKNOWN"
+            };
 
-    let reply_to = match &content {
-        dtchat::chat_message::Content::Text(text_msg) => text_msg.reply_to_uuid.clone(),
-        _ => None,
+            let ack_text = format!(
+                "[ACK] {} for message: {}",
+                status_type, delivery_status.message_uuid
+            );
+            (ack_text, None)
+        }
+        dtchat::chat_message::Content::File(_) => (
+            "File transfer (not implemented for display)".to_string(),
+            None,
+        ),
+        dtchat::chat_message::Content::Presence(_) => (
+            "Presence update (not implemented for display)".to_string(),
+            None,
+        ),
     };
 
     let tx_time = Utc.timestamp_millis_opt(proto.timestamp).single()?;

@@ -3,14 +3,11 @@ mod app;
 mod layout;
 mod utils;
 
+use crate::utils::socket::DefaultSocketController;
+use crate::utils::socket::SocketController;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
-use utils::{
-    config::AppConfigManager,
-    message::{ChatMessage, MessageStatus},
-    proto::generate_uuid,
-    socket::{DefaultSocketController, SocketController, SocketObserver},
-};
+use utils::{config::AppConfigManager, socket::SocketObserver};
 
 #[derive(Clone)]
 pub struct ArcChatApp {
@@ -97,10 +94,7 @@ fn main() -> Result<(), eframe::Error> {
 
     match DefaultSocketController::init_controller(local_peer.clone(), shared_peers.clone()) {
         Ok(controller) => {
-            controller
-                .lock()
-                .unwrap()
-                .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
+            controller.lock().unwrap().add_observer(model_arc.clone());
         }
         Err(e) => {
             eprintln!("Failed to initialize socket controller: {:?}", e);
