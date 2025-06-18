@@ -45,7 +45,7 @@ struct SockAddrBp {
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     let mut sockaddr_bp = SockAddrBp {
-        bp_family: AF_BP as u8,
+        bp_family: AF_BP as libc::sa_family_t,
         eid_str: [0; 126],
     };
 
