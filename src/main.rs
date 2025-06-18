@@ -7,7 +7,7 @@ use crate::utils::socket::DefaultSocketController;
 use crate::utils::socket::SocketController;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
-use utils::{config::AppConfigManager, socket::SocketObserver};
+use utils::config::AppConfigManager;
 
 #[derive(Clone)]
 pub struct ArcChatApp {
@@ -21,9 +21,9 @@ fn main() -> Result<(), eframe::Error> {
     let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
 
-    let mut now = Utc::now() - Duration::seconds(40);
+    let now = Utc::now() - Duration::seconds(40);
 
-    let mut model = ChatModel::new(
+    let model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),

@@ -99,7 +99,7 @@ impl MessageGraphView {
             })
             .auto_reset(reset_requested)
             .show(ui, |plot_ui| {
-                plot_ui.vline(VLine::new(now).color(Color32::from_rgb(255, 0, 0)));
+                plot_ui.vline(VLine::new("Current Time", now).color(Color32::from_rgb(255, 0, 0)));
 
                 for (_uuid, (peer, boxes)) in per_sender {
                     let peer_name = peer.name.clone();
@@ -107,8 +107,7 @@ impl MessageGraphView {
                     // Create a new String that we can move into the closure
                     let formatter_peer_name = peer_name.clone();
 
-                    let box_for_senders = BoxPlot::new(boxes)
-                        .name(peer_name)
+                    let box_for_senders = BoxPlot::new(peer_name.clone(), boxes)
                         .color(peer.get_color())
                         .horizontal()
                         .allow_hover(true)

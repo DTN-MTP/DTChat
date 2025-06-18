@@ -8,16 +8,16 @@ egui = "0.31.0"
 chrono = "0.4"
 eframe = "0.31.0"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_yaml = "0.9.34"
-socket2 = "0.4"
+serde_yaml = "0.9.33"
+socket2 = "0.5.10"
 tokio = { version = "1.30", features = ["rt-multi-thread", "macros", "io-util", "net", "time", "sync"] }
 async-trait = "0.1"
 once_cell = "1.17"
-egui_plot = "0.31.0"
-prost = "0.12.3"
+egui_plot = "0.32.0"
+prost = "0.14.1"
 bytes = "1.5.0"
 uuid = { version = "1.6.1", features = ["v4"] }
-libc = "0.2"
+libc = "0.2.174"
 
 [features]
 bp = []
@@ -25,4 +25,4 @@ dev = []
 delayed_ack = []
 
 [build-dependencies]
-prost-build = "0.12.3"
+prost-build = "0.14.1"

@@ -1,7 +1,7 @@
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
-use libc::{self};
+use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
 
-static AF_BP: Lazy<Domain> = Lazy::new(|| Domain::from(28));
+const AF_BP: c_int = 28;
 
 pub static TOKIO_RUNTIME: Lazy<Runtime> =
     Lazy::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
@@ -38,13 +38,13 @@ impl Endpoint {
 #[derive(Debug, Copy, Clone)]
 
 struct SockAddrBp {
-    bp_family: Domain,
+    bp_family: libc::sa_family_t,
     eid_str: [u8; 126],
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     let mut sockaddr_bp = SockAddrBp {
-        bp_family: *AF_BP,
+        bp_family: AF_BP as u8,
         eid_str: [0; 126],
     };
 
@@ -107,7 +107,7 @@ impl GenericSocket {
                 )
             }
             Endpoint::Bp(addr) => (
-                *AF_BP,
+                Domain::from(AF_BP),
                 Type::DGRAM,
                 Protocol::from(0),
                 create_bp_sockaddr_with_string(addr)?,
@@ -168,7 +168,7 @@ impl GenericSocket {
                         let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
                             match socket.read(&mut buffer) {
-                                Ok((size)) => {
+                                Ok(size) => {
                                     println!(
                                         "UDP/BP received data on listening address {}",
                                         address
@@ -352,8 +352,18 @@ impl DefaultSocketController {
         let controller_arc = Arc::new(Mutex::new(controller));
 
         for endpoint in &local_peer.endpoints {
-            let mut sock = GenericSocket::new(endpoint).unwrap();
-            sock.start_listener(controller_arc.clone())?;
+            match GenericSocket::new(endpoint) {
+                Ok(mut sock) => {
+                    if let Err(e) = sock.start_listener(controller_arc.clone()) {
+                        eprintln!("Failed to start listener for endpoint {:?}: {}", endpoint, e);
+                        // Continue with next endpoint instead of failing completely
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Failed to create socket for endpoint {:?}: {}", endpoint, e);
+                    // Continue with next endpoint instead of failing
+                }
+            }
         }
 
         Ok(controller_arc)
