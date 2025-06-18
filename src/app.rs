@@ -3,12 +3,8 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{
-    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
-    SocketObserver,
-};
-use chrono::{Duration, Local, Utc};
+use crate::utils::socket::SocketObserver;
+use chrono::{Duration, Local};
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;

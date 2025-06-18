@@ -1,7 +1,6 @@
 use crate::app::ChatApp;
 use eframe::egui;
 use egui::{ComboBox, TextEdit};
-use std::sync::Arc;
 
 pub struct MessageForge {}
 

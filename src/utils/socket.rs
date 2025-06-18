@@ -1,14 +1,15 @@
+use crate::utils::ack;
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message};
-use libc::{self, c_int, sockaddr_storage, socklen_t};
+use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::io::{self, Error, Read, Write};
+use std::mem;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::{mem, ptr};
 use tokio::runtime::Runtime;
 
 const AF_BP: c_int = 28;
@@ -38,13 +39,13 @@ impl Endpoint {
 #[derive(Debug, Copy, Clone)]
 
 struct SockAddrBp {
-    bp_family: libc::sa_family_t, // 2 bytes
-    eid_str: [u8; 126],           // 126 bytes - must match C struct
+    bp_family: libc::sa_family_t,
+    eid_str: [u8; 126],
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     let mut sockaddr_bp = SockAddrBp {
-        bp_family: AF_BP as u16,
+        bp_family: AF_BP as libc::sa_family_t,
         eid_str: [0; 126],
     };
 
@@ -73,8 +74,19 @@ pub struct GenericSocket {
     sockaddr: SockAddr,
     listening: bool,
 }
+
+impl Clone for GenericSocket {
+    fn clone(&self) -> Self {
+        Self {
+            socket: self.socket.try_clone().expect("Failed to clone socket"),
+            eidpoint: self.eidpoint.clone(),
+            sockaddr: self.sockaddr.clone(),
+            listening: self.listening,
+        }
+    }
+}
 impl GenericSocket {
-    pub fn new(eid: &Endpoint) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(eid: &Endpoint) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let (domain, semtype, proto, address): (Domain, Type, Protocol, SockAddr) = match eid {
             Endpoint::Udp(addr) => {
                 let std_sock = addr.parse()?;
@@ -112,7 +124,7 @@ impl GenericSocket {
         });
     }
 
-    pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match self.eidpoint {
             Endpoint::Bp(_) | Endpoint::Udp(_) => {
                 self.socket.send_to(data, &self.sockaddr.clone())?;
@@ -157,7 +169,7 @@ impl GenericSocket {
                         let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
                             match socket.read(&mut buffer) {
-                                Ok((size)) => {
+                                Ok(size) => {
                                     println!(
                                         "UDP/BP received data on listening address {}",
                                         address
@@ -170,6 +182,8 @@ impl GenericSocket {
                                         if let Some(message) =
                                             deserialize_message(&buffer[..size], &peers)
                                         {
+                                            controller.send_ack_if_needed(&message);
+                                            // Notify observers about the received message
                                             controller.notify_observers(message);
                                         }
                                     });
@@ -212,6 +226,7 @@ impl GenericSocket {
                     }
                 });
             }
+   
         }
 
         Ok(())
@@ -230,6 +245,9 @@ async fn handle_tcp_connection(
             let peers = controller.get_peers();
 
             if let Some(message) = deserialize_message(buffer_slice, &peers) {
+                // Send ACK if this is a message requiring acknowledgment
+                controller.send_ack_if_needed(&message);
+                // Notify observers about the received message
                 controller.notify_observers(message);
             }
         }
@@ -280,6 +298,34 @@ impl DefaultSocketController {
         self.local_peer = Some(peer);
     }
 
+    pub fn send_ack_if_needed(&self, message: &ChatMessage) {
+        if message.text.starts_with("[ACK]") {
+            return;
+        }
+
+        if let Some(local_peer) = &self.local_peer {
+            if local_peer.endpoints.is_empty() {
+                return;
+            }
+
+            let msg_clone = message.clone();
+            let peer_clone = local_peer.clone();
+
+            ack::send_ack_message_non_blocking(
+                &msg_clone,
+                &mut match GenericSocket::new(&peer_clone.endpoints[0]) {
+                    Ok(socket) => socket,
+                    Err(e) => {
+                        eprintln!("Failed to create socket for ACK: {}", e);
+                        return;
+                    }
+                },
+                false, // Not read yet, just received
+                None,  // Use default config
+            );
+        }
+    }
+
     fn notify_observers(&self, message: ChatMessage) {
         let observers_clone = self.observers.clone();
         let message_clone = message.clone();
@@ -292,7 +338,7 @@ impl DefaultSocketController {
     pub fn init_controller(
         local_peer: Peer,
         peers: Vec<Peer>,
-    ) -> Result<Arc<Mutex<DefaultSocketController>>, Box<dyn std::error::Error>> {
+    ) -> Result<Arc<Mutex<DefaultSocketController>>, Box<dyn std::error::Error + Send + Sync>> {
         let mut controller = Self::new();
         controller.set_local_peer(local_peer.clone());
         controller.set_peers(peers);
@@ -300,8 +346,18 @@ impl DefaultSocketController {
         let controller_arc = Arc::new(Mutex::new(controller));
 
         for endpoint in &local_peer.endpoints {
-            let mut sock = GenericSocket::new(endpoint).unwrap();
-            sock.start_listener(controller_arc.clone())?;
+            match GenericSocket::new(endpoint) {
+                Ok(mut sock) => {
+                    if let Err(e) = sock.start_listener(controller_arc.clone()) {
+                        eprintln!("Failed to start listener for endpoint {:?}: {}", endpoint, e);
+                        // Continue with next endpoint instead of failing completely
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Failed to create socket for endpoint {:?}: {}", endpoint, e);
+                    // Continue with next endpoint instead of failing
+                }
+            }
         }
 
         Ok(controller_arc)
@@ -309,11 +365,17 @@ impl DefaultSocketController {
 }
 
 pub trait SendingSocket: Send + Sync {
-    fn send_message(&mut self, message: &ChatMessage) -> Result<usize, Box<dyn std::error::Error>>;
+    fn send_message(
+        &mut self,
+        message: &ChatMessage,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 impl SendingSocket for GenericSocket {
-    fn send_message(&mut self, message: &ChatMessage) -> Result<usize, Box<dyn std::error::Error>> {
+    fn send_message(
+        &mut self,
+        message: &ChatMessage,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let serialized = serialize_message(message);
         self.send(&serialized)?;
         Ok(serialized.len())

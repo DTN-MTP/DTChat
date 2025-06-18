@@ -1,8 +1,5 @@
 use serde::Deserialize;
-use std::{
-    fs,
-    sync::{Arc, Mutex},
-};
+use std::fs;
 
 use super::socket::Endpoint;
 

@@ -1,7 +1,6 @@
 use crate::app::ChatApp;
 use eframe::egui;
 use egui::{Align, ComboBox, Layout};
-use std::sync::Arc;
 
 use super::actions::create_room::CreateRoomForm;
 
