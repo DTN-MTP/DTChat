@@ -4,45 +4,101 @@ use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection};
 use crate::utils::colors::COLORS;
 use crate::utils::config::Peer;
 use crate::utils::message::{ChatMessage, MessageStatus};
+use crate::utils::network_config::NetworkConfig;
 use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{GenericSocket, SendingSocket, TOKIO_RUNTIME};
+use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket, TOKIO_RUNTIME};
 use chrono::Utc;
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
 use libc::UTIME_NOW;
 
-pub struct MessagePrompt {
-    pbat_enabled : bool,
+
+// Parse the whole adress to ion_id
+fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
+    if bp_address.starts_with("ipn:") {
+        let after_ipn = &bp_address[4..];
+        if let Some(dot_pos) = after_ipn.find('.') {
+            return after_ipn[..dot_pos].to_string();
+        }
+    }
+    bp_address.to_string()
 }
 
-pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg : ChatMessage, pbat_enabled : bool) {
 
-    let socket = GenericSocket::new(&receiver.endpoints[0]);
+pub struct MessagePrompt {}
 
-    match socket {
-        Ok(mut socket) => match socket.send_message(&msg) {
-            Ok(_) => {
-                let mut model_locked = model.lock().unwrap();
-                model_locked.add_message(msg.clone(), MessageDirection::Sent);
+pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
+    let network_config_ref = {
+        let model_lock = model.lock().unwrap();
+        model_lock.network_config.is_some()
+    };
+
+    if let Endpoint::Bp(_) = &receiver.endpoints[0] {
+        let sender_ion_id = {
+            let mut found_ion_id = None;
+            // Find BP endpoint in sender's endpoints
+            for endpoint in &msg.sender.endpoints {
+                if let Endpoint::Bp(bp_address) = endpoint {
+                    found_ion_id = Some(extract_ion_id_from_bp_address(bp_address));
+                    break;
+                }
             }
+            // Use found ION ID or fallback to UUID
+            found_ion_id.unwrap_or_else(|| msg.sender.uuid.clone())
+        };
+        let receiver_ion_id = if let Endpoint::Bp(bp_address) = &receiver.endpoints[0] {
+            extract_ion_id_from_bp_address(bp_address)
+        } else {
+            receiver.uuid.clone()
+        };
+
+
+        if network_config_ref {
+            let model_lock = model.lock().unwrap();
+            if let Some(config) = &model_lock.network_config {
+                let message_size = msg.text.len() as f64;
+                match config.route_with_ion_ids(&sender_ion_id, &receiver_ion_id, message_size) {
+                    Ok(true) => {
+                        println!("✅ Route found from {} to {}", sender_ion_id, receiver_ion_id);
+                    }
+                    Ok(false) => {
+                        println!("❌ No route found from {} to {}", sender_ion_id, receiver_ion_id);
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Routing error: {}", e);
+                    }
+                }
+            }
+        }
+
+        let socket = GenericSocket::new(&receiver.endpoints[0]);
+
+        match socket {
+            Ok(mut socket) => match socket.send_message(&msg) {
+                Ok(_) => {
+                    let mut model_locked = model.lock().unwrap();
+                    model_locked.add_message(msg.clone(), MessageDirection::Sent);
+                }
+                Err(_) => model
+                    .lock()
+                    .unwrap()
+                    .notify_observers(AppEvent::MessageError("Socket error.".to_string())),
+            },
             Err(_) => model
                 .lock()
                 .unwrap()
-                .notify_observers(AppEvent::MessageError("Socket error.".to_string())),
-        },
-        Err(_) => model
-            .lock()
-            .unwrap()
-            .notify_observers(AppEvent::MessageError(
-                "Socket initialization failed.".to_string(),
-            )),
+                .notify_observers(AppEvent::MessageError(
+                    "Socket initialization failed.".to_string(),
+                )),
+        }
+
+
     }
 }
 
 impl MessagePrompt {
     pub fn new() -> Self {
         Self {
-            pbat_enabled: false,
         }
     }
 
@@ -100,7 +156,6 @@ impl MessagePrompt {
                     text: message_text.clone(),
                     shipment_status: MessageStatus::Sent(Utc::now())
                 };
-
                 TOKIO_RUNTIME.spawn_blocking(move || {
                     manage_send(model_clone, msg,receiver_clone);
                 });
