@@ -149,6 +149,7 @@ pub struct MessagePanel {
     pub forging_rx_time: String,
     pub forging_receiver: Peer,
     pub send_status: Option<String>,
+    pub pbat_enabled : bool,
 }
 
 pub struct ChatApp {
@@ -175,6 +176,7 @@ impl ChatApp {
                     .to_string(),
                 forging_receiver,
                 send_status: None,
+                pbat_enabled : false,
             },
         };
         return app;

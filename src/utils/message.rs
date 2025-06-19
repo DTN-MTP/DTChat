@@ -15,6 +15,7 @@ pub struct ChatMessage {
     pub sender: Peer,
     pub text: String,
     pub shipment_status: MessageStatus,
+    pub pbat_enabled : bool,
 }
 
 impl ChatMessage {
