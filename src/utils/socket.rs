@@ -6,7 +6,7 @@ use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, Read, Write};
+use std::io::{self, Read, Write};
 use std::mem;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -33,6 +33,22 @@ impl Endpoint {
             Endpoint::Bp(s) => s.clone(),
         }
     }
+
+    /// Check if this endpoint is valid and can be used for socket operations
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Endpoint::Udp(addr) | Endpoint::Tcp(addr) => {
+                // Try to parse the address to see if it's valid
+                addr.parse::<std::net::SocketAddr>().is_ok()
+            }
+            Endpoint::Bp(addr) => {
+                // Check if it's not a placeholder and follows basic BP EID format
+                !addr.contains("PLACEHOLDER") && 
+                !addr.is_empty() && 
+                (addr.starts_with("ipn:") || addr.starts_with("dtn:"))
+            }
+        }
+    }
 }
 
 #[repr(C)]
@@ -44,6 +60,28 @@ struct SockAddrBp {
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
+    // Validate the EID string format
+    if eid_string.contains("PLACEHOLDER") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Cannot create socket with placeholder address: {}", eid_string),
+        ));
+    }
+    
+    if eid_string.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "EID string cannot be empty",
+        ));
+    }
+    
+    if !eid_string.starts_with("ipn:") && !eid_string.starts_with("dtn:") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Invalid BP EID format: {}", eid_string),
+        ));
+    }
+
     let mut sockaddr_bp = SockAddrBp {
         bp_family: AF_BP as libc::sa_family_t,
         eid_str: [0; 126],
@@ -134,12 +172,6 @@ impl GenericSocket {
                 self.socket.write_all(data)?;
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
-            }
-            _ => {
-                return Err(Box::new(Error::new(
-                    std::io::ErrorKind::Unsupported,
-                    "Unsupported socket type",
-                )))
             }
         }
 
@@ -346,6 +378,12 @@ impl DefaultSocketController {
         let controller_arc = Arc::new(Mutex::new(controller));
 
         for endpoint in &local_peer.endpoints {
+            // Skip invalid or placeholder endpoints
+            if !endpoint.is_valid() {
+                eprintln!("Skipping invalid or placeholder endpoint: {:?}", endpoint);
+                continue;
+            }
+            
             match GenericSocket::new(endpoint) {
                 Ok(mut sock) => {
                     if let Err(e) = sock.start_listener(controller_arc.clone()) {
