@@ -21,7 +21,7 @@ fn main() -> Result<(), eframe::Error> {
     let shared_rooms = config.room_list;
     let local_peer = config.local_peer;
 
-    let now = Utc::now() - Duration::seconds(40);
+    let _now = Utc::now() - Duration::seconds(40);
 
     let model = ChatModel::new(
         shared_peers.clone(),

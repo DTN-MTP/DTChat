@@ -1,7 +1,7 @@
 use crate::utils::ack;
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
-use crate::utils::proto::{deserialize_message, serialize_message};
+use crate::utils::proto::{deserialize_message, serialize_message, DeserializedMessage};
 use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -207,18 +207,33 @@ impl GenericSocket {
                                         address
                                     );
                                     let new_controller_arc = Arc::clone(&controller_arc);
+                                    let address_clone = address.clone();
                                     TOKIO_RUNTIME.spawn(async move {
                                         let controller = new_controller_arc.lock().unwrap();
                                         let peers = controller.get_peers();
+                                        let endpoint_type = if address_clone.starts_with("ipn:") || address_clone.starts_with("dtn:") {
+                                            Endpoint::Bp(address_clone.clone())
+                                        } else {
+                                            Endpoint::Udp(address_clone.clone())
+                                        };
 
-                                        if let Some(message) =
+                                        if let Some(deserialized) =
                                             deserialize_message(&buffer[..size], &peers)
                                         {
-                                            controller.send_ack_if_needed(&message);
-                                            // Notify observers about the received message
-                                            controller.notify_observers(message);
+                                            match deserialized {
+                                            DeserializedMessage::ChatMessage(message) => {
+                                                println!("📨 Received message: '{}' from {}", message.text, message.sender.name);
+                                                controller.send_ack_if_needed_with_endpoint_info(&message, Some(&endpoint_type));
+                                                controller.notify_observers(message);
+                                            }
+                                            DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
+                                                println!("✅ Received ACK for message {} (read: {}) at {}", 
+                                                    message_uuid, is_read, ack_time.format("%H:%M:%S"));
+                                                controller.handle_ack_received(&message_uuid, is_read, ack_time);
+                                            }
                                         }
-                                    });
+                                    }
+                                });
                                 }
                                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                                     thread::sleep(std::time::Duration::from_millis(10));
@@ -275,12 +290,24 @@ async fn handle_tcp_connection(
             let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
+            
+            // Get the peer address to determine the endpoint
+            let peer_addr = stream.peer_addr().ok();
+            let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
 
-            if let Some(message) = deserialize_message(buffer_slice, &peers) {
-                // Send ACK if this is a message requiring acknowledgment
-                controller.send_ack_if_needed(&message);
-                // Notify observers about the received message
-                controller.notify_observers(message);
+            if let Some(deserialized) = deserialize_message(buffer_slice, &peers) {
+                match deserialized {
+                    DeserializedMessage::ChatMessage(message) => {
+                        println!("📨 TCP Received message: '{}' from {}", message.text, message.sender.name);
+                        controller.send_ack_if_needed_with_endpoint_info(&message, tcp_endpoint.as_ref());
+                        controller.notify_observers(message);
+                    }
+                    DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
+                        println!("✅ TCP Received ACK for message {} (read: {}) at {}", 
+                            message_uuid, is_read, ack_time.format("%H:%M:%S"));
+                        controller.handle_ack_received(&message_uuid, is_read, ack_time);
+                    }
+                }
             }
         }
         Err(e) => {
@@ -291,6 +318,10 @@ async fn handle_tcp_connection(
 
 pub trait SocketObserver: Send + Sync {
     fn on_socket_event(&self, message: ChatMessage);
+    fn on_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+        // Default implementation does nothing
+        let _ = (message_uuid, is_read, ack_time);
+    }
 }
 
 pub trait SocketController: Send + Sync {
@@ -331,31 +362,108 @@ impl DefaultSocketController {
     }
 
     pub fn send_ack_if_needed(&self, message: &ChatMessage) {
+        self.send_ack_if_needed_with_endpoint_info(message, None);
+    }
+
+    pub fn send_ack_if_needed_with_endpoint_info(&self, message: &ChatMessage, received_on_endpoint: Option<&Endpoint>) {
         if message.text.starts_with("[ACK]") {
             return;
         }
 
+        println!("📤 Preparing to send ACK for message: '{}'", message.text);
+
         if let Some(local_peer) = &self.local_peer {
             if local_peer.endpoints.is_empty() {
+                println!("❌ No endpoints available for local peer");
                 return;
             }
 
-            let msg_clone = message.clone();
-            let peer_clone = local_peer.clone();
+            // Find the sender peer to send ACK back to them
+            if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
+                if sender_peer.endpoints.is_empty() {
+                    println!("❌ No endpoints available for sender peer {}", sender_peer.name);
+                    return;
+                }
 
-            ack::send_ack_message_non_blocking(
-                &msg_clone,
-                &mut match GenericSocket::new(&peer_clone.endpoints[0]) {
-                    Ok(socket) => socket,
-                    Err(e) => {
-                        eprintln!("Failed to create socket for ACK: {}", e);
-                        return;
-                    }
-                },
-                false, // Not read yet, just received
-                None,  // Use default config
-            );
+                // Choose the best endpoint for sending the ACK
+                let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
+                
+                println!("🎯 Sending ACK to {} via {}", sender_peer.name, target_endpoint.to_string());
+
+                let msg_clone = message.clone();
+                let local_peer_uuid = local_peer.uuid.clone();
+                
+                // Send ACK to the chosen endpoint
+                ack::send_ack_message_non_blocking(
+                    &msg_clone,
+                    &mut match GenericSocket::new(&target_endpoint) {
+                        Ok(socket) => socket,
+                        Err(e) => {
+                            eprintln!("Failed to create socket for ACK: {}", e);
+                            return;
+                        }
+                    },
+                    &local_peer_uuid,
+                    false, // Not read yet, just received
+                    None,  // Use default config
+                );
+            } else {
+                println!("❌ Sender peer {} not found in peer list", message.sender.uuid);
+            }
         }
+    }
+
+    fn choose_ack_endpoint(&self, sender_peer: &Peer, received_on_endpoint: Option<&Endpoint>) -> Endpoint {
+        // If we know which endpoint the message was received on, try to find a compatible one
+        if let Some(received_endpoint) = received_on_endpoint {
+            // For BP messages, prefer BP endpoints for ACK
+            if matches!(received_endpoint, Endpoint::Bp(_)) {
+                if let Some(bp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Bp(_))) {
+                    return bp_endpoint.clone();
+                }
+            }
+            
+            // For TCP/UDP, try to use the same protocol if available
+            match received_endpoint {
+                Endpoint::Tcp(_) => {
+                    if let Some(tcp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Tcp(_))) {
+                        return tcp_endpoint.clone();
+                    }
+                }
+                Endpoint::Udp(_) => {
+                    if let Some(udp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Udp(_))) {
+                        return udp_endpoint.clone();
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // Fallback: prioritize BP > TCP > UDP for ACK reliability
+        for endpoint in &sender_peer.endpoints {
+            match endpoint {
+                Endpoint::Bp(_) if endpoint.is_valid() => return endpoint.clone(),
+                _ => {}
+            }
+        }
+        for endpoint in &sender_peer.endpoints {
+            match endpoint {
+                Endpoint::Tcp(_) if endpoint.is_valid() => return endpoint.clone(),
+                _ => {}
+            }
+        }
+        for endpoint in &sender_peer.endpoints {
+            match endpoint {
+                Endpoint::Udp(_) if endpoint.is_valid() => return endpoint.clone(),
+                _ => {}
+            }
+        }
+        
+        // Ultimate fallback: first valid endpoint
+        sender_peer.endpoints.iter()
+            .find(|ep| ep.is_valid())
+            .unwrap_or(&sender_peer.endpoints[0])
+            .clone()
     }
 
     fn notify_observers(&self, message: ChatMessage) {
@@ -364,6 +472,14 @@ impl DefaultSocketController {
 
         for observer in observers_clone {
             observer.on_socket_event(message_clone.clone());
+        }
+    }
+
+    pub fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+        println!("🔄 Processing ACK for message {}", message_uuid);
+        // Notify observers about the ACK so they can update message status
+        for observer in &self.observers {
+            observer.on_ack_received(message_uuid, is_read, ack_time);
         }
     }
 

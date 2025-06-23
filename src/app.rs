@@ -4,7 +4,7 @@ use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::socket::SocketObserver;
-use chrono::{Duration, Local};
+use chrono::{Duration, Local, DateTime, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -26,10 +26,12 @@ pub enum SortStrategy {
 fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
@@ -38,10 +40,12 @@ fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
 fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
         MessageStatus::Sent(tx) => (tx, tx),
+        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let anchor_a = if a.sender.uuid == ctx_peer_uuid {
@@ -125,12 +129,34 @@ impl ChatModel {
                 .sort_by(|a, b| relative_cmp(a, b, for_peer.uuid.as_str())),
         }
     }
+
+    /// Update message status when ACK is received
+    pub fn update_message_with_ack(&mut self, message_uuid: &str, is_read: bool, ack_time: DateTime<Utc>) -> bool {
+        for message in &mut self.messages {
+            if message.uuid == message_uuid {
+                message.update_with_ack(is_read, ack_time);
+                return true;
+            }
+        }
+        false // Message not found
+    }
 }
 
 impl SocketObserver for Mutex<ChatModel> {
     fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
         model.add_message(message, MessageDirection::Received);
+    }
+
+    fn on_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+        let mut model = self.lock().unwrap();
+        if model.update_message_with_ack(message_uuid, is_read, ack_time) {
+            println!("Updated message {} with ACK (read: {})", message_uuid, is_read);
+            // Trigger UI update
+            model.notify_observers(AppEvent::MessageSent("Message status updated".to_string()));
+        } else {
+            println!("ACK received for unknown message: {}", message_uuid);
+        }
     }
 }
 
