@@ -361,35 +361,27 @@ impl DefaultSocketController {
         self.local_peer = Some(peer);
     }
 
-    pub fn send_ack_if_needed(&self, message: &ChatMessage) {
-        self.send_ack_if_needed_with_endpoint_info(message, None);
-    }
-
     pub fn send_ack_if_needed_with_endpoint_info(&self, message: &ChatMessage, received_on_endpoint: Option<&Endpoint>) {
         if message.text.starts_with("[ACK]") {
             return;
         }
 
         println!("📤 Preparing to send ACK for message: '{}'", message.text);
+        println!("🔍 Looking for sender with UUID: {}", message.sender.uuid);
 
         if let Some(local_peer) = &self.local_peer {
-            if local_peer.endpoints.is_empty() {
-                println!("❌ No endpoints available for local peer");
-                return;
+            // Afficher tous les peers disponibles pour déboguer
+            println!("📋 Available peers:");
+            for peer in &self.peers {
+                println!("  - UUID: {}, Name: {}", peer.uuid, peer.name);
             }
 
-            // Find the sender peer to send ACK back to them
             if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
-                if sender_peer.endpoints.is_empty() {
-                    println!("❌ No endpoints available for sender peer {}", sender_peer.name);
-                    return;
-                }
-
-                // Choose the best endpoint for sending the ACK
-                let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
+                println!("✅ Found sender peer: {} (UUID: {})", sender_peer.name, sender_peer.uuid);
                 
+                let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
                 println!("🎯 Sending ACK to {} via {}", sender_peer.name, target_endpoint.to_string());
-
+                
                 let msg_clone = message.clone();
                 let local_peer_uuid = local_peer.uuid.clone();
                 
@@ -409,6 +401,8 @@ impl DefaultSocketController {
                 );
             } else {
                 println!("❌ Sender peer {} not found in peer list", message.sender.uuid);
+                println!("📋 Available peer UUIDs: {:?}", self.peers.iter().map(|p| &p.uuid).collect::<Vec<_>>());
+
             }
         }
     }
