@@ -12,24 +12,31 @@ use a_sabr::{
     bundle::Bundle,
     utils::pretty_print
 };
+use chrono::{Timelike, Utc, DateTime, NaiveDateTime};
+use libc::UTIME_NOW;
 use std::io;
 
 use crate::utils::socket::Endpoint;
 
-pub struct NetworkConfig {
+pub struct prediction_config {
     ion_to_node_id : RwLock<HashMap<String,NodeID>>,
-    router : Mutex<Box<dyn Router<NoManagement,EVLManager>+ Send + Sync>>
+    router : Mutex<Box<dyn Router<NoManagement,EVLManager>+ Send + Sync>>,
+    cp_start_time : f64,
 }
 
-impl NetworkConfig {
+impl prediction_config {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
+
+        println!("RAW contact plan : ");
+        println!("{}",contact_plan);
+
         let (nodes, contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
 
         let ion_to_node_id = Self::map_node_indices(contact_plan)?;
 
         // Generate the router
         let router = build_generic_router::<NoManagement, EVLManager>(
-            "CgrFirstEndingContactGraph", // Use this instead of ContactGraph
+            "CgrFirstEndingContactGraph",
             nodes,
             contacts,
             None
@@ -38,14 +45,25 @@ impl NetworkConfig {
         let router: Box<dyn Router<NoManagement, EVLManager> + Send + Sync> =
             unsafe { std::mem::transmute(router) };
 
-        Ok(NetworkConfig {
+        let cp_start_time = Utc::now().timestamp() as f64;
+
+        Ok(prediction_config {
             ion_to_node_id: RwLock::new(ion_to_node_id),
             router : Mutex::new(router),
+            cp_start_time
         })
     }
 
     pub fn get_node_id(&self,ion_id:&str) -> Option<NodeID>{
         self.ion_to_node_id.read().unwrap().get(ion_id).copied()
+    }
+
+    pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
+        let secs = timestamp.trunc() as i64;
+        let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
+        let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
+            .expect("Invalid timestamp");
+        DateTime::<Utc>::from_utc(naive, Utc)
     }
 
 
@@ -73,14 +91,6 @@ impl NetworkConfig {
         }
     }
 
-    pub fn test_endpoint(&self, endpoint: &Endpoint) -> bool {
-        if let Some(ion_id) = Self::extract_ion_node_from_endpoint(endpoint) {
-            self.ion_to_node_id.read().unwrap().contains_key(&ion_id)
-        } else {
-            false
-        }
-    }
-
 
     pub fn map_node_indices(contact_plan: &str) -> io::Result<HashMap<String, NodeID>> {
         let (nodes, _contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
@@ -93,7 +103,7 @@ impl NetworkConfig {
     }
 
 
-    pub fn route_with_ion_ids(&self, source_ion: &str, dest_ion: &str, message_size: f64) -> io::Result<Date> {
+    pub fn predict(&self, source_ion: &str, dest_ion: &str, message_size: f64) -> io::Result<Date> {
 
         let source_node_id = self.get_node_id(source_ion).ok_or_else(|| {
             io::Error::new(
@@ -114,23 +124,35 @@ impl NetworkConfig {
             destinations: vec![dest_node_id],
             priority: 0,
             size: message_size,
-            expiration: 10000.0,
+            expiration: Date::MAX,
         };
 
-        let current_time = 0.0;
         let excluded_nodes = vec![];
 
+        let cp_send_time = Utc::now().timestamp() as f64 - self.cp_start_time;
+
         let mut router = self.router.lock().unwrap();
-        match router.route(bundle.source, &bundle, current_time, &excluded_nodes) {
+        match router.route(bundle.source, &bundle, cp_send_time, &excluded_nodes) {
             Some(routing_output) => {
                 println!("Route found from ION {} to ION {}!", source_ion, dest_ion);
 
                 // Only display the last element
                 if let Some((_contact_ptr, (_contact, route_stages))) = routing_output.first_hops.iter().last() {
                     if let Some(last_stage) = route_stages.last() {
-                        // Extract the time value
-                        let time_value = last_stage.borrow().at_time;
-                        return Ok(time_value);
+                        // Create a borrow and use it consistently
+                        let last_stage_borrowed = last_stage.borrow();
+
+                        let delay = last_stage_borrowed.at_time;
+
+                        println!("#########################################################");
+                        println!("the cp_start_time in UTC is : {:?}", prediction_config::f64_to_utc(self.cp_start_time));
+                        println!("cp_start_time is {}", self.cp_start_time);
+                        println!("cp_send_time is {}", cp_send_time);
+                        println!("delay is {}", delay);
+                        println!("returned value is {}", delay + self.cp_start_time);
+                        println!("returned value in UTC is {:?}", prediction_config::f64_to_utc(delay + self.cp_start_time));
+
+                        return Ok(delay + self.cp_start_time);
                     }
                 }
                 Err(io::Error::new(

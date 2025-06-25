@@ -11,7 +11,7 @@ use utils::{
     message::{ChatMessage, MessageStatus},
     proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
-    network_config::NetworkConfig,
+    prediction_config::prediction_config,
 };
 
 #[derive(Clone)]
@@ -33,10 +33,10 @@ fn main() -> Result<(), eframe::Error> {
 
     let mut now = Utc::now() - Duration::seconds(40);
 
-    let network_config = match NetworkConfig::new(&contact_plan) {
+    let prediction_config = match prediction_config::new(&contact_plan) {
         Ok(config) => Some(config),
         Err(e) => {
-            eprintln!("Failed to create NetworkConfig: {}", e);
+            eprintln!("Failed to create prediction_config: {}", e);
             None
         }
     };
@@ -45,7 +45,7 @@ fn main() -> Result<(), eframe::Error> {
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),
-        network_config
+        prediction_config
     );
 
     #[cfg(feature = "dev")]
