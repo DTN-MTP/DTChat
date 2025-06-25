@@ -6,9 +6,9 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::{self, Error, ErrorKind, Read, Write};
-use std::{mem, ptr};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::{mem, ptr};
 use tokio::runtime::Runtime;
 
 const AF_BP: c_int = 28;
@@ -115,12 +115,10 @@ impl GenericSocket {
     pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
         match self.eidpoint {
             Endpoint::Bp(_) | Endpoint::Udp(_) => {
-                self.socket
-                    .send_to(data, &self.sockaddr.clone())?;
+                self.socket.send_to(data, &self.sockaddr.clone())?;
             }
             Endpoint::Tcp(_) => {
-                self.socket
-                    .connect(&self.sockaddr.clone())?;
+                self.socket.connect(&self.sockaddr.clone())?;
                 self.socket.write_all(data)?;
                 self.socket.flush()?;
                 self.socket.shutdown(std::net::Shutdown::Both)?;
