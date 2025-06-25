@@ -1,27 +1,46 @@
 use std::sync::{Arc, Mutex};
 
-use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection};
+use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection, MessagePanel};
 use crate::utils::colors::COLORS;
 use crate::utils::config::Peer;
 use crate::utils::message::{ChatMessage, MessageStatus};
+use crate::utils::prediction_config::prediction_config;
 use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{GenericSocket, SendingSocket, TOKIO_RUNTIME};
-use chrono::Utc;
+use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket, TOKIO_RUNTIME};
+use chrono::{Utc, Local, DateTime, NaiveDateTime};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
+use libc::{ARPHRD_ATM, UTIME_NOW};
+
+
+// Parse the whole adress to ion_id
+fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
+    if bp_address.starts_with("ipn:") {
+        let after_ipn = &bp_address[4..];
+        if let Some(dot_pos) = after_ipn.find('.') {
+            return after_ipn[..dot_pos].to_string();
+        }
+    }
+    bp_address.to_string()
+}
+
+
+pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
+    let secs = timestamp.trunc() as i64;
+    let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
+    let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
+        .expect("Invalid timestamp");
+    DateTime::<Utc>::from_utc(naive, Utc)
+}
+
 
 pub struct MessagePrompt {}
 
-pub fn manage_send(model: Arc<Mutex<ChatModel>>, text: &str, receiver: Peer) {
-    let msg = ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender: model.lock().unwrap().localpeer.clone(),
-        text: text.to_string(),
-        shipment_status: MessageStatus::Sent(Utc::now()),
-    };
+
+pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
 
     let socket = GenericSocket::new(&receiver.endpoints[0]);
+    println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
     match socket {
         Ok(mut socket) => match socket.send_message(&msg) {
@@ -43,9 +62,11 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, text: &str, receiver: Peer) {
     }
 }
 
+
 impl MessagePrompt {
     pub fn new() -> Self {
-        Self {}
+        Self {
+        }
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
@@ -62,7 +83,6 @@ impl MessagePrompt {
                 }
                 _ => true,
             });
-
         ui.add_space(4.0);
         let mut send_message = false;
         ui.horizontal(|ui| {
@@ -74,6 +94,9 @@ impl MessagePrompt {
                 send_message = true;
                 response.request_focus();
             }
+
+            ui.checkbox(&mut app.message_panel.pbat_enabled, "PBAT");
+
             if ui
                 .add(
                     egui::Button::new("Send")
@@ -92,11 +115,54 @@ impl MessagePrompt {
                 app.message_panel.send_status =
                     Some("Cannot send message to local peer".to_string());
             } else {
-                let message_text = app.message_panel.message_to_send.clone();
                 let model_clone = app.model_arc.clone();
                 let receiver_clone = forging_receiver.clone();
+
+                let mut prediction_time : Option<DateTime<Utc>> = None;
+
+                // Do the prediction here
+                if (app.message_panel.pbat_enabled) {
+                    let sender_ion_id = {
+                        let model_lock = app.model_arc.lock().unwrap();
+                        let sender = &model_lock.localpeer;
+                        let mut found_ion_id = None;
+
+                        // Find BP endpoint in sender's endpoints
+                        for endpoint in &sender.endpoints {
+                            if let Endpoint::Bp(bp_address) = endpoint {
+                                found_ion_id = Some(extract_ion_id_from_bp_address(bp_address));
+                                break;
+                            }
+                        }
+
+                        // Use found ION ID or fallback to UUID
+                        found_ion_id.unwrap_or_else(|| sender.uuid.clone())
+                    };
+
+                    let receiver_ion_id = if let Endpoint::Bp(bp_address) = &forging_receiver.endpoints[0] {
+                        extract_ion_id_from_bp_address(bp_address)
+                    } else {
+                        forging_receiver.uuid.clone()
+                    };
+                    let message_size = app.message_panel.message_to_send.len() as f64;
+
+                    let model_lock = app.model_arc.lock().unwrap();
+                    if let Some(config) = &model_lock.prediction_config {
+                        if let Ok(arrival_time) = config.predict(&sender_ion_id, &receiver_ion_id, message_size) {
+                            prediction_time = Some(f64_to_utc(arrival_time));
+                        }
+                    }
+                }
+
+                let msg = ChatMessage {
+                    uuid: generate_uuid(),
+                    response: None,
+                    sender: model_clone.lock().unwrap().localpeer.clone(),
+                    text: app.message_panel.message_to_send.clone(),
+                    shipment_status: MessageStatus::Sent(Utc::now(),prediction_time),
+                };
                 TOKIO_RUNTIME.spawn_blocking(move || {
-                    manage_send(model_clone, &message_text, receiver_clone);
+                    manage_send(model_clone, msg,receiver_clone);
                 });
 
                 app.message_panel.message_to_send.clear();
