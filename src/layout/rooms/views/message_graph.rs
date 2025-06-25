@@ -57,10 +57,21 @@ impl MessageGraphView {
             }
 
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
-                let (tx, rx) = message.get_timestamps();
+                let (tx, pbat_opt, rx_opt) = message.get_timestamps();
+
+
+                let upper_whisker =  if let Some(received) = rx_opt {
+                    received - 1.0
+                } else {
+                    if let Some(pbat) = pbat_opt {
+                        pbat
+                    } else {
+                        tx - 1.0
+                    }
+                };
 
                 box_elems.push(
-                    BoxElem::new(index as f64, BoxSpread::new(tx + 1.0, tx, tx, rx, rx - 1.0))
+                    BoxElem::new(index as f64, BoxSpread::new(tx + 1.0, tx, tx, rx_opt.unwrap_or(tx), upper_whisker))
                         .name(message.text.clone()),
                 );
             };

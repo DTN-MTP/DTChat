@@ -45,14 +45,14 @@ impl ChatMessage {
         }
     }
 
-    pub fn get_timestamps(&self) -> (f64, f64) {
+    pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
             MessageStatus::Sent(tx, pbat_opt) => {
                 let pbat_val = pbat_opt.unwrap_or(tx);
-                (tx.timestamp_millis() as f64, pbat_val.timestamp_millis() as f64)
+                (tx.timestamp_millis() as f64, Some(pbat_val.timestamp_millis() as f64), None)
             }
             MessageStatus::Received(tx, rx) => {
-                (tx.timestamp_millis() as f64, rx.timestamp_millis() as f64)
+                (tx.timestamp_millis() as f64, None ,Some(rx.timestamp_millis() as f64))
             }
         }
     }
