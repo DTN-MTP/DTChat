@@ -54,7 +54,6 @@ peer_list:
         address: "ipn:20.2"
     color: 2
 
-
 room_list:
   - uuid: 0
     name: room 1
