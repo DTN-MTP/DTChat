@@ -23,7 +23,7 @@ impl ChatMessage {
         match &self.shipment_status {
             MessageStatus::Sent(tx) => {
                 format!(
-                    "[{}->?][{}]",
+                    "[{}][{}]",
                     tx.format("%H:%M:%S").to_string(),
                     self.sender.name
                 )
@@ -47,14 +47,15 @@ impl ChatMessage {
         }
     }
 
-    pub fn get_timestamps(&self) -> (f64, f64) {
+    pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
             MessageStatus::Sent(tx) => (tx.timestamp_millis() as f64, tx.timestamp_millis() as f64),
             MessageStatus::Acknowledged(tx, acked) => {
                 (tx.timestamp_millis() as f64, acked.timestamp_millis() as f64)
+
             }
             MessageStatus::Received(tx, rx) => {
-                (tx.timestamp_millis() as f64, rx.timestamp_millis() as f64)
+                (tx.timestamp_millis() as f64, None ,Some(rx.timestamp_millis() as f64))
             }
         }
     }

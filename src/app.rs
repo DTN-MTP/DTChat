@@ -1,6 +1,7 @@
 use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
+use crate::utils::prediction_config::prediction_config;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::socket::SocketObserver;
@@ -68,6 +69,7 @@ pub struct ChatModel {
     pub rooms: Vec<Room>,
     pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
+    pub prediction_config : Option<prediction_config>
 }
 
 pub enum MessageDirection {
@@ -76,7 +78,7 @@ pub enum MessageDirection {
 }
 
 impl ChatModel {
-    pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>) -> Self {
+    pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>,  prediction_config: Option<prediction_config>) -> Self {
         Self {
             sort_strategy: SortStrategy::Standard,
             localpeer,
@@ -84,6 +86,7 @@ impl ChatModel {
             rooms,
             messages: Vec::new(),
             observers: Vec::new(),
+            prediction_config
         }
     }
 
@@ -168,6 +171,7 @@ pub struct MessagePanel {
     pub forging_rx_time: String,
     pub forging_receiver: Peer,
     pub send_status: Option<String>,
+    pub pbat_enabled : bool,
 }
 
 pub struct ChatApp {
@@ -194,6 +198,7 @@ impl ChatApp {
                     .to_string(),
                 forging_receiver,
                 send_status: None,
+                pbat_enabled : false,
             },
         };
         return app;
