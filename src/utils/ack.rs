@@ -70,7 +70,7 @@ pub fn create_ack_message(received_msg: &ChatMessage, local_peer_uuid: &str, is_
 pub async fn send_ack_message(
     received_msg: &ChatMessage,
     socket: &mut GenericSocket,
-    _local_peer_uuid: &str,
+    local_peer_uuid: &str,
     is_read: bool,
     config: Option<AckConfig>,
 ) -> AckResult<()> {
@@ -81,7 +81,7 @@ pub async fn send_ack_message(
     }
 
     // Send ACK based on build mode
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "no_protobuf")]
     {
         use crate::utils::proto::serialize_ack_debug;
         let ack_data = serialize_ack_debug(&received_msg.uuid, is_read);
@@ -94,8 +94,10 @@ pub async fn send_ack_message(
         }
     }
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_protobuf"))]
     {
+        use prost::Message;
+
         let ack_proto_msg = create_ack_message(received_msg, local_peer_uuid, is_read);
 
         let mut buf = bytes::BytesMut::with_capacity(ack_proto_msg.encoded_len());

@@ -18,10 +18,10 @@ pub enum DeserializedMessage {
 }
 
 pub fn serialize_message(message: &ChatMessage) -> Bytes {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "no_protobuf")]
     return Bytes::from(message.text.clone() + "\n");
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_protobuf"))]
     {
         let proto_msg = construct_proto_message(message);
         let mut buf = bytes::BytesMut::with_capacity(proto_msg.encoded_len());
@@ -32,7 +32,7 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 }
 
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_protobuf"))]
     {
         use prost::Message;
         if let Ok(proto_msg) = dtchat::ChatMessage::decode(buf) {
@@ -89,11 +89,10 @@ pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(feature = "no_protobuf"))]
 fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
-    use chrono::TimeZone;
 
-    let (tx_time, _) = message.get_timestamps();
+    let (tx_time, _, _) = message.get_timestamps();
 
     let content = {
         let text_message = dtchat::TextMessage {
@@ -112,7 +111,7 @@ fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(feature = "no_protobuf"))]
 fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<DeserializedMessage> {
     use chrono::TimeZone;
 
