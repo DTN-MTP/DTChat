@@ -29,17 +29,6 @@ impl MessageForge {
                         }
                     }
                 });
-
-            ui.add_space(4.0);
-            ui.label("Send Time:");
-            ui.add(
-                TextEdit::singleline(&mut app.message_panel.forging_tx_time).desired_width(100.0),
-            );
-
-            ui.label("Receive Time:");
-            ui.add(
-                TextEdit::singleline(&mut app.message_panel.forging_rx_time).desired_width(100.0),
-            );
         });
         ui.add_space(4.0);
     }

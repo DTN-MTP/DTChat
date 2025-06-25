@@ -26,13 +26,11 @@ pub enum SortStrategy {
 
 fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx) => (tx, tx),
-        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
+        MessageStatus::Sent(tx,rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx) => (tx, tx),
-        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
+        MessageStatus::Sent(tx,rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
@@ -40,13 +38,11 @@ fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
 
 fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx) => (tx, tx),
-        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
+        MessageStatus::Sent(tx,rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx) => (tx, tx),
-        MessageStatus::Acknowledged(tx, acked) => (tx, acked),
+        MessageStatus::Sent(tx,rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let anchor_a = if a.sender.uuid == ctx_peer_uuid {
@@ -61,6 +57,7 @@ fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Orderi
     };
     return anchor_a.cmp(anchor_b);
 }
+
 
 pub struct ChatModel {
     pub sort_strategy: SortStrategy,
@@ -167,8 +164,6 @@ pub struct MessagePanel {
     pub message_view: RoomView,
     pub create_modal_open: bool,
     pub message_to_send: String,
-    pub forging_tx_time: String,
-    pub forging_rx_time: String,
     pub forging_receiver: Peer,
     pub send_status: Option<String>,
     pub pbat_enabled : bool,
@@ -192,10 +187,6 @@ impl ChatApp {
                 message_view: RoomView::default(),
                 create_modal_open: false,
                 message_to_send: String::new(),
-                forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
-                forging_rx_time: (Local::now() + Duration::hours(1))
-                    .format("%H:%M:%S")
-                    .to_string(),
                 forging_receiver,
                 send_status: None,
                 pbat_enabled : false,

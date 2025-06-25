@@ -158,7 +158,7 @@ impl MessagePrompt {
                     response: None,
                     sender: model_clone.lock().unwrap().localpeer.clone(),
                     text: app.message_panel.message_to_send.clone(),
-                    shipment_status: MessageStatus::Sent(Utc::now(),prediction_time),
+                    shipment_status: MessageStatus::Sent(Utc::now(), prediction_time),
                 };
                 TOKIO_RUNTIME.spawn_blocking(move || {
                     manage_send(model_clone, msg,receiver_clone);

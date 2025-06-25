@@ -38,7 +38,7 @@ impl MessageListView {
                             ui.close_menu();
                         }
                         if ui.button("Local").on_hover_text("Sorted by receiving time for the local peer and sending times for the other peers").clicked() {
-                            locked_model.sort_messages(SortStrategy::Relative(local_peer));
+                            locked_model.sort_messages(SortStrategy::Relative(local_peer.clone()));
                             ui.close_menu();
                         }
                         ui.menu_button("Relative", |ui| {
@@ -62,10 +62,11 @@ impl MessageListView {
                 for message in &locked_model.messages {
                     ui.horizontal(|ui| {
                         let color = message.sender.get_color();
+                        let sent_by_me = local_peer.uuid == message.sender.uuid;
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}: {}",
-                                message.get_shipment_status_str(),
+                                message.get_shipment_status_str(sent_by_me),
                                 message.text
                             ))
                             .color(color),

@@ -4,8 +4,6 @@ mod app;
 mod layout;
 mod utils;
 
-use crate::utils::socket::DefaultSocketController;
-use crate::utils::socket::SocketController;
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 
