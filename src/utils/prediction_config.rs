@@ -4,7 +4,7 @@ use a_sabr::{
     node::Node,
     contact::Contact,
     node_manager::none::NoManagement,
-    contact_manager::evl::EVLManager,
+    contact_manager::legacy::evl::EVLManager,
     contact_plan::from_ion_file::IONContactPlan,
     routing::Router,
     routing::aliases::build_generic_router,
