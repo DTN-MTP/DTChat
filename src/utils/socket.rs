@@ -67,14 +67,14 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
             format!("Cannot create socket with placeholder address: {}", eid_string),
         ));
     }
-    
+
     if eid_string.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "EID string cannot be empty",
         ));
     }
-    
+
     if !eid_string.starts_with("ipn:") && !eid_string.starts_with("dtn:") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -216,7 +216,7 @@ impl GenericSocket {
                                         } else {
                                             Endpoint::Udp(address_clone.clone())
                                         };
-
+                                        
                                         if let Some(deserialized) =
                                             deserialize_message(&buffer[..size], &peers)
                                         {
@@ -227,14 +227,12 @@ impl GenericSocket {
                                                 controller.notify_observers(message);
                                             }
                                             DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
-                                                println!("✅ Received ACK for message {} (read: {}) at {}", 
+                                                println!("✅ Received ACK for message {} (read: {}) at {}",
                                                     message_uuid, is_read, ack_time.format("%H:%M:%S"));
                                                 controller.handle_ack_received(&message_uuid, is_read, ack_time);
                                             }
                                         }
                                     }
-                                    println!("TODO: FIX ME !");
-                                    todo!();
                                 });
                                 }
                                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -292,7 +290,7 @@ async fn handle_tcp_connection(
             let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
-            
+
             // Get the peer address to determine the endpoint
             let peer_addr = stream.peer_addr().ok();
             let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
@@ -495,7 +493,7 @@ impl DefaultSocketController {
                 eprintln!("Skipping invalid or placeholder endpoint: {:?}", endpoint);
                 continue;
             }
-            
+
             match GenericSocket::new(endpoint) {
                 Ok(mut sock) => {
                     if let Err(e) = sock.start_listener(controller_arc.clone()) {

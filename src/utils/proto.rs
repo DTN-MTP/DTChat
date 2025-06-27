@@ -35,7 +35,11 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMes
     #[cfg(not(feature = "no_protobuf"))]
     {
         use prost::Message;
-        if let Ok(proto_msg) = dtchat::ChatMessage::decode(buf) {
+
+        let protobuf_length = buf[0] as usize;           // Read length from first byte
+        let clean_buf = &buf[1..1 + protobuf_length];   // Extract only protobuf data
+
+        if let Ok(proto_msg) = dtchat::ChatMessage::decode(clean_buf){
             return extract_message_from_proto(proto_msg, peers);
         }
     }
