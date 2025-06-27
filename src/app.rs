@@ -145,6 +145,15 @@ impl ChatModel {
 impl SocketObserver for Mutex<ChatModel> {
     fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
+
+        #[cfg(feature = "delayed_ack")] {
+            let mut msg_clone = message.clone();
+            match msg_clone.shipment_status {
+                MessageStatus::Sent(tx,_)| MessageStatus::Received(tx, _) => msg_clone.shipment_status = MessageStatus::Received(tx, chrono::Utc::now()),
+            }
+            model.add_message(msg_clone, MessageDirection::Received);
+        }
+        #[cfg(not(feature = "delayed_ack"))]
         model.add_message(message, MessageDirection::Received);
     }
 
