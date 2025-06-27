@@ -6,6 +6,7 @@ mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
+
 use utils::{
     config::AppConfigManager,
     message::{ChatMessage, MessageStatus},
@@ -31,7 +32,7 @@ fn main() -> Result<(), eframe::Error> {
         eprintln!("Contact plan missing !!!");
     }
 
-    let mut now = Utc::now() - Duration::seconds(40);
+    let _now = Utc::now() - Duration::seconds(40);
 
     let prediction_config = match prediction_config::new(&contact_plan) {
         Ok(config) => Some(config),
@@ -113,10 +114,7 @@ fn main() -> Result<(), eframe::Error> {
 
     match DefaultSocketController::init_controller(local_peer.clone(), shared_peers.clone()) {
         Ok(controller) => {
-            controller
-                .lock()
-                .unwrap()
-                .add_observer(model_arc.clone() as Arc<dyn SocketObserver + Send + Sync>);
+            controller.lock().unwrap().add_observer(model_arc.clone());
         }
         Err(e) => {
             eprintln!("Failed to initialize socket controller: {:?}", e);

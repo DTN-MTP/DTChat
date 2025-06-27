@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::config::Peer;
@@ -9,11 +9,19 @@ pub mod dtchat {
     include!(concat!(env!("OUT_DIR"), "/dtchat.rs"));
 }
 
+pub use dtchat::chat_message::Content;
+
+#[derive(Debug)]
+pub enum DeserializedMessage {
+    ChatMessage(ChatMessage),
+    Ack { message_uuid: String, is_read: bool, ack_time: DateTime<Utc> },
+}
+
 pub fn serialize_message(message: &ChatMessage) -> Bytes {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "no_protobuf")]
     return Bytes::from(message.text.clone() + "\n");
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(feature = "no_protobuf"))]
     {
         let proto_msg = construct_proto_message(message);
         let mut buf = bytes::BytesMut::with_capacity(proto_msg.encoded_len());
@@ -23,28 +31,51 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
     }
 }
 
-pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<ChatMessage> {
-    #[cfg(not(debug_assertions))]
+pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
+    #[cfg(not(feature = "no_protobuf"))]
     {
         use prost::Message;
-        if let Ok(proto_msg) = dtchat::ChatMessage::decode(buf) {
+
+        let protobuf_length = buf[0] as usize;           // Read length from first byte
+        let clean_buf = &buf[1..1 + protobuf_length];   // Extract only protobuf data
+
+        if let Ok(proto_msg) = dtchat::ChatMessage::decode(clean_buf){
             return extract_message_from_proto(proto_msg, peers);
         }
     }
 
+    // Handle text-based messages (debug mode)
     if let Ok(text) = std::str::from_utf8(buf) {
         let text = text.trim_end();
         if !text.is_empty() {
             let now = Utc::now();
+            
+            // Check if this is an ACK message in debug mode
+            if text.starts_with("[ACK]") {
+                // Parse ACK format: [ACK] message_uuid:is_read
+                if let Some(ack_data) = text.strip_prefix("[ACK] ") {
+                    let parts: Vec<&str> = ack_data.split(':').collect();
+                    if parts.len() == 2 {
+                        let message_uuid = parts[0].to_string();
+                        let is_read = parts[1] == "true";
+                        return Some(DeserializedMessage::Ack {
+                            message_uuid,
+                            is_read,
+                            ack_time: now,
+                        });
+                    }
+                }
+            }
+
             let default_peer = find_peer_by_id(peers, "0").unwrap_or_else(default_peer);
 
-            return Some(ChatMessage {
+            return Some(DeserializedMessage::ChatMessage(ChatMessage {
                 uuid: generate_uuid(),
                 response: None,
                 sender: default_peer,
                 text: text.to_string(),
                 shipment_status: MessageStatus::Received(now, now),
-            });
+            }));
         }
     }
     None
@@ -58,32 +89,21 @@ fn default_peer() -> Peer {
     Peer::default()
 }
 
-pub fn create_message(text: &str, sender: Peer) -> ChatMessage {
-    ChatMessage {
-        uuid: generate_uuid(),
-        response: None,
-        sender,
-        text: text.to_string(),
-        shipment_status: MessageStatus::Received(Utc::now(), Utc::now()),
-    }
-}
-
 pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(feature = "no_protobuf"))]
 fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
-    use chrono::TimeZone;
 
-    let (tx_time, _) = message.get_timestamps();
+    let (tx_time, _, _) = message.get_timestamps();
 
     let content = {
         let text_message = dtchat::TextMessage {
             content: message.text.clone(),
             reply_to_uuid: message.response.clone(),
         };
-        Some(dtchat::chat_message::Content::Text(text_message))
+        Some(Content::Text(text_message))
     };
 
     dtchat::ChatMessage {
@@ -95,32 +115,52 @@ fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
     }
 }
 
-#[cfg(not(debug_assertions))]
-fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<ChatMessage> {
+#[cfg(not(feature = "no_protobuf"))]
+fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<DeserializedMessage> {
     use chrono::TimeZone;
 
     let sender = find_peer_by_id(peers, &proto.sender_uuid).unwrap_or_else(default_peer);
 
     let content = proto.content.clone()?;
 
-    let text = match &content {
-        dtchat::chat_message::Content::Text(text_msg) => text_msg.content.clone(),
-        _ => return None,
-    };
+    // Handle ACK messages separately
+    if let Content::Delivery(delivery_status) = &content {
+        let ack_time = Utc.timestamp_millis_opt(proto.timestamp).single()?;
+        return Some(DeserializedMessage::Ack {
+            message_uuid: delivery_status.message_uuid.clone(),
+            is_read: delivery_status.read,
+            ack_time,
+        });
+    }
 
-    let reply_to = match &content {
-        dtchat::chat_message::Content::Text(text_msg) => text_msg.reply_to_uuid.clone(),
-        _ => None,
+    // Extract text based on the message type
+    let (text, reply_to) = match &content {
+        Content::Text(text_msg) => (text_msg.content.clone(), text_msg.reply_to_uuid.clone()),
+        Content::File(_) => (
+            "File transfer (not implemented for display)".to_string(),
+            None,
+        ),
+        Content::Presence(_) => (
+            "Presence update (not implemented for display)".to_string(),
+            None,
+        ),
+        Content::Delivery(_) => unreachable!(), // Already handled above
     };
 
     let tx_time = Utc.timestamp_millis_opt(proto.timestamp).single()?;
     let rx_time = Utc::now();
 
-    Some(ChatMessage {
+    Some(DeserializedMessage::ChatMessage(ChatMessage {
         uuid: proto.uuid,
         response: reply_to,
         sender,
         text,
         shipment_status: MessageStatus::Received(tx_time, rx_time),
-    })
+    }))
+}
+
+/// Serialize an ACK message for debug mode
+pub fn serialize_ack_debug(message_uuid: &str, is_read: bool) -> Bytes {
+    let ack_content = format!("[ACK] {}:{}\n", message_uuid, is_read);
+    Bytes::from(ack_content)
 }

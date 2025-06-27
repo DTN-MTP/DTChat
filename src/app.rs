@@ -4,12 +4,8 @@ use crate::layout::ui::display;
 use crate::utils::prediction_config::prediction_config;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{
-    DefaultSocketController, Endpoint, GenericSocket, SendingSocket, SocketController,
-    SocketObserver,
-};
-use chrono::{Duration, Local, Utc};
+use crate::utils::socket::SocketObserver;
+use chrono::{Duration, Local, DateTime, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -61,6 +57,7 @@ fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Orderi
     };
     return anchor_a.cmp(anchor_b);
 }
+
 
 pub struct ChatModel {
     pub sort_strategy: SortStrategy,
@@ -132,6 +129,17 @@ impl ChatModel {
                 .sort_by(|a, b| relative_cmp(a, b, for_peer.uuid.as_str())),
         }
     }
+
+    /// Update message status when ACK is received
+    pub fn update_message_with_ack(&mut self, message_uuid: &str, is_read: bool, ack_time: DateTime<Utc>) -> bool {
+        for message in &mut self.messages {
+            if message.uuid == message_uuid {
+                message.update_with_ack(is_read, ack_time);
+                return true;
+            }
+        }
+        false // Message not found
+    }
 }
 
 impl SocketObserver for Mutex<ChatModel> {
@@ -139,14 +147,23 @@ impl SocketObserver for Mutex<ChatModel> {
         let mut model = self.lock().unwrap();
         model.add_message(message, MessageDirection::Received);
     }
+
+    fn on_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+        let mut model = self.lock().unwrap();
+        if model.update_message_with_ack(message_uuid, is_read, ack_time) {
+            println!("Updated message {} with ACK (read: {})", message_uuid, is_read);
+            // Trigger UI update
+            model.notify_observers(AppEvent::MessageSent("Message status updated".to_string()));
+        } else {
+            println!("ACK received for unknown message: {}", message_uuid);
+        }
+    }
 }
 
 pub struct MessagePanel {
     pub message_view: RoomView,
     pub create_modal_open: bool,
     pub message_to_send: String,
-    pub forging_tx_time: String,
-    pub forging_rx_time: String,
     pub forging_receiver: Peer,
     pub send_status: Option<String>,
     pub pbat_enabled : bool,
@@ -170,10 +187,6 @@ impl ChatApp {
                 message_view: RoomView::default(),
                 create_modal_open: false,
                 message_to_send: String::new(),
-                forging_tx_time: Local::now().format("%H:%M:%S").to_string(),
-                forging_rx_time: (Local::now() + Duration::hours(1))
-                    .format("%H:%M:%S")
-                    .to_string(),
                 forging_receiver,
                 send_status: None,
                 pbat_enabled : false,
