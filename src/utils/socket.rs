@@ -317,7 +317,7 @@ async fn handle_tcp_connection(
                             .send_ack_if_needed_with_endpoint_info(&message, tcp_endpoint.as_ref());
                         #[cfg(feature = "delayed_ack")]
                         {
-                            let ctrl_clone = new_controller_arc.clone();
+                            let ctrl_clone = controller_arc.clone();
                             TOKIO_RUNTIME.spawn(async move {
                                 sleep(Duration::from_millis(
                                     AckConfig::default().delay_duration_ms,
