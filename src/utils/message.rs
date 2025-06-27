@@ -4,7 +4,7 @@ use super::config::Peer;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageStatus {
-    Sent(DateTime<Utc>, Option<DateTime<Utc>>),                        // Message sent, awaiting ACK
+    Sent(DateTime<Utc>, Option<DateTime<Utc>>), // Message sent, awaiting ACK
     Received(DateTime<Utc>, DateTime<Utc>),     // Message received from peer
 }
 
@@ -27,7 +27,7 @@ impl ChatMessage {
                     "??".to_string()
                 };
 
-               format!(
+                format!(
                     "[{}->{}][{}]",
                     tx.format("%H:%M:%S").to_string(),
                     pred_str,
@@ -35,7 +35,7 @@ impl ChatMessage {
                 )
             }
             MessageStatus::Received(tx, rx) => {
-                let acked = if sent_by_me {"✓" } else {""};
+                let acked = if sent_by_me { "✓" } else { "" };
                 format!(
                     "[{}->{}{}][{}]",
                     tx.format("%H:%M:%S").to_string(),
@@ -46,15 +46,21 @@ impl ChatMessage {
             }
         }
     }
-     pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
+    pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
             MessageStatus::Sent(tx, pbat_opt) => {
                 let pbat_val = pbat_opt.unwrap_or(tx);
-                (tx.timestamp_millis() as f64, Some(pbat_val.timestamp_millis() as f64), None)
+                (
+                    tx.timestamp_millis() as f64,
+                    Some(pbat_val.timestamp_millis() as f64),
+                    None,
+                )
             }
-            MessageStatus::Received(tx, rx) => {
-                (tx.timestamp_millis() as f64, None ,Some(rx.timestamp_millis() as f64))
-            }
+            MessageStatus::Received(tx, rx) => (
+                tx.timestamp_millis() as f64,
+                None,
+                Some(rx.timestamp_millis() as f64),
+            ),
         }
     }
 

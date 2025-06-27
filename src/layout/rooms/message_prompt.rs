@@ -7,11 +7,10 @@ use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::prediction_config::prediction_config;
 use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket, TOKIO_RUNTIME};
-use chrono::{Utc, Local, DateTime, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
 use libc::{ARPHRD_ATM, UTIME_NOW};
-
 
 // Parse the whole adress to ion_id
 fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
@@ -24,21 +23,16 @@ fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
     bp_address.to_string()
 }
 
-
 pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
     let secs = timestamp.trunc() as i64;
     let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
-    let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
-        .expect("Invalid timestamp");
+    let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs).expect("Invalid timestamp");
     DateTime::<Utc>::from_utc(naive, Utc)
 }
 
-
 pub struct MessagePrompt {}
 
-
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
-
     let socket = GenericSocket::new(&receiver.endpoints[0]);
     println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
@@ -62,11 +56,9 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
     }
 }
 
-
 impl MessagePrompt {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
@@ -117,7 +109,7 @@ impl MessagePrompt {
                 let model_clone = app.model_arc.clone();
                 let receiver_clone = forging_receiver.clone();
 
-                let mut prediction_time : Option<DateTime<Utc>> = None;
+                let mut prediction_time: Option<DateTime<Utc>> = None;
 
                 // Do the prediction here
                 if (app.message_panel.pbat_enabled) {
@@ -138,16 +130,19 @@ impl MessagePrompt {
                         found_ion_id.unwrap_or_else(|| sender.uuid.clone())
                     };
 
-                    let receiver_ion_id = if let Endpoint::Bp(bp_address) = &forging_receiver.endpoints[0] {
-                        extract_ion_id_from_bp_address(bp_address)
-                    } else {
-                        forging_receiver.uuid.clone()
-                    };
+                    let receiver_ion_id =
+                        if let Endpoint::Bp(bp_address) = &forging_receiver.endpoints[0] {
+                            extract_ion_id_from_bp_address(bp_address)
+                        } else {
+                            forging_receiver.uuid.clone()
+                        };
                     let message_size = app.message_panel.message_to_send.len() as f64;
 
                     let model_lock = app.model_arc.lock().unwrap();
                     if let Some(config) = &model_lock.prediction_config {
-                        if let Ok(arrival_time) = config.predict(&sender_ion_id, &receiver_ion_id, message_size) {
+                        if let Ok(arrival_time) =
+                            config.predict(&sender_ion_id, &receiver_ion_id, message_size)
+                        {
                             prediction_time = Some(f64_to_utc(arrival_time));
                         }
                     }
@@ -161,7 +156,7 @@ impl MessagePrompt {
                     shipment_status: MessageStatus::Sent(Utc::now(), prediction_time),
                 };
                 TOKIO_RUNTIME.spawn_blocking(move || {
-                    manage_send(model_clone, msg,receiver_clone);
+                    manage_send(model_clone, msg, receiver_clone);
                 });
 
                 app.message_panel.message_to_send.clear();

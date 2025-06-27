@@ -59,8 +59,7 @@ impl MessageGraphView {
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
                 let (tx, pbat_opt, rx_opt) = message.get_timestamps();
 
-
-                let upper_whisker =  if let Some(received) = rx_opt {
+                let upper_whisker = if let Some(received) = rx_opt {
                     received - 1.0
                 } else {
                     if let Some(pbat) = pbat_opt {
@@ -71,8 +70,11 @@ impl MessageGraphView {
                 };
 
                 box_elems.push(
-                    BoxElem::new(index as f64, BoxSpread::new(tx + 1.0, tx, tx, rx_opt.unwrap_or(tx), upper_whisker))
-                        .name(message.text.clone()),
+                    BoxElem::new(
+                        index as f64,
+                        BoxSpread::new(tx + 1.0, tx, tx, rx_opt.unwrap_or(tx), upper_whisker),
+                    )
+                    .name(message.text.clone()),
                 );
             };
         }
@@ -110,7 +112,11 @@ impl MessageGraphView {
             })
             .auto_reset(reset_requested)
             .show(ui, |plot_ui| {
-                plot_ui.vline(VLine::new(now).name("Current Time").color(Color32::from_rgb(255, 0, 0)));
+                plot_ui.vline(
+                    VLine::new(now)
+                        .name("Current Time")
+                        .color(Color32::from_rgb(255, 0, 0)),
+                );
 
                 for (_uuid, (peer, boxes)) in per_sender {
                     let peer_name = peer.name.clone();
@@ -118,7 +124,8 @@ impl MessageGraphView {
                     // Create a new String that we can move into the closure
                     let formatter_peer_name = peer_name.clone();
 
-                    let box_for_senders = BoxPlot::new(boxes).name(peer_name.clone())
+                    let box_for_senders = BoxPlot::new(boxes)
+                        .name(peer_name.clone())
                         .color(peer.get_color())
                         .horizontal()
                         .allow_hover(true)

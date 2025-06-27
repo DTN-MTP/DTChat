@@ -51,7 +51,11 @@ impl std::fmt::Display for AckError {
 impl std::error::Error for AckError {}
 
 #[allow(dead_code)]
-pub fn create_ack_message(received_msg: &ChatMessage, local_peer_uuid: &str, is_read: bool) -> dtchat::ChatMessage {
+pub fn create_ack_message(
+    received_msg: &ChatMessage,
+    local_peer_uuid: &str,
+    is_read: bool,
+) -> dtchat::ChatMessage {
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
         received: true,
@@ -87,9 +91,12 @@ pub async fn send_ack_message(
         let ack_data = serialize_ack_debug(&received_msg.uuid, is_read);
         match socket.send(&ack_data) {
             Ok(_) => {
-                println!("Sent ACK for message {} (read: {})", received_msg.uuid, is_read);
+                println!(
+                    "Sent ACK for message {} (read: {})",
+                    received_msg.uuid, is_read
+                );
                 Ok(())
-            },
+            }
             Err(e) => Err(AckError::Network(e)),
         }
     }
@@ -108,9 +115,12 @@ pub async fn send_ack_message(
 
         match socket.send(&buf.freeze()) {
             Ok(_) => {
-                println!("Sent protobuf ACK for message {} (read: {})", received_msg.uuid, is_read);
+                println!(
+                    "Sent protobuf ACK for message {} (read: {})",
+                    received_msg.uuid, is_read
+                );
                 Ok(())
-            },
+            }
             Err(e) => Err(AckError::Network(e)),
         }
     }
@@ -128,7 +138,15 @@ pub fn send_ack_message_non_blocking(
     let local_peer_uuid_clone = local_peer_uuid.to_string();
 
     socket::TOKIO_RUNTIME.spawn(async move {
-        if let Err(e) = send_ack_message(&msg_clone, &mut socket_clone, &local_peer_uuid_clone, is_read, config).await {
+        if let Err(e) = send_ack_message(
+            &msg_clone,
+            &mut socket_clone,
+            &local_peer_uuid_clone,
+            is_read,
+            config,
+        )
+        .await
+        {
             eprintln!("Failed to send ACK message: {}", e);
         }
     });

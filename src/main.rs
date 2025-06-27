@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 mod app;
 mod layout;
 mod utils;
@@ -10,9 +10,9 @@ use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
     message::{ChatMessage, MessageStatus},
+    prediction_config::prediction_config,
     proto::generate_uuid,
     socket::{DefaultSocketController, SocketController, SocketObserver},
-    prediction_config::prediction_config,
 };
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ fn main() -> Result<(), eframe::Error> {
     let local_peer = config.local_peer;
     let contact_plan = config.a_sabr;
 
-    if !Path::new(&contact_plan).exists(){
+    if !Path::new(&contact_plan).exists() {
         eprintln!("Contact plan missing !!!");
     }
 
@@ -46,7 +46,7 @@ fn main() -> Result<(), eframe::Error> {
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),
-        prediction_config
+        prediction_config,
     );
 
     #[cfg(feature = "dev")]

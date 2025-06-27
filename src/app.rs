@@ -1,11 +1,11 @@
 use crate::layout::menu_bar::NavigationItems;
 use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
-use crate::utils::prediction_config::prediction_config;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
+use crate::utils::prediction_config::prediction_config;
 use crate::utils::socket::SocketObserver;
-use chrono::{Duration, Local, DateTime, Utc};
+use chrono::{DateTime, Duration, Local, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -26,11 +26,11 @@ pub enum SortStrategy {
 
 fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx,rx) => (tx, tx),
+        MessageStatus::Sent(tx, rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx,rx) => (tx, tx),
+        MessageStatus::Sent(tx, rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
@@ -38,11 +38,11 @@ fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
 
 fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx,rx) => (tx, tx),
+        MessageStatus::Sent(tx, rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx,rx) => (tx, tx),
+        MessageStatus::Sent(tx, rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let anchor_a = if a.sender.uuid == ctx_peer_uuid {
@@ -58,7 +58,6 @@ fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Orderi
     return anchor_a.cmp(anchor_b);
 }
 
-
 pub struct ChatModel {
     pub sort_strategy: SortStrategy,
     pub localpeer: Peer,
@@ -66,7 +65,7 @@ pub struct ChatModel {
     pub rooms: Vec<Room>,
     pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
-    pub prediction_config : Option<prediction_config>
+    pub prediction_config: Option<prediction_config>,
 }
 
 pub enum MessageDirection {
@@ -75,7 +74,12 @@ pub enum MessageDirection {
 }
 
 impl ChatModel {
-    pub fn new(peers: Vec<Peer>, localpeer: Peer, rooms: Vec<Room>,  prediction_config: Option<prediction_config>) -> Self {
+    pub fn new(
+        peers: Vec<Peer>,
+        localpeer: Peer,
+        rooms: Vec<Room>,
+        prediction_config: Option<prediction_config>,
+    ) -> Self {
         Self {
             sort_strategy: SortStrategy::Standard,
             localpeer,
@@ -83,7 +87,7 @@ impl ChatModel {
             rooms,
             messages: Vec::new(),
             observers: Vec::new(),
-            prediction_config
+            prediction_config,
         }
     }
 
@@ -131,7 +135,12 @@ impl ChatModel {
     }
 
     /// Update message status when ACK is received
-    pub fn update_message_with_ack(&mut self, message_uuid: &str, is_read: bool, ack_time: DateTime<Utc>) -> bool {
+    pub fn update_message_with_ack(
+        &mut self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: DateTime<Utc>,
+    ) -> bool {
         for message in &mut self.messages {
             if message.uuid == message_uuid {
                 message.update_with_ack(is_read, ack_time);
@@ -146,27 +155,33 @@ impl SocketObserver for Mutex<ChatModel> {
     fn on_socket_event(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
 
-        #[cfg(feature = "delayed_ack")] {
-            socket::TOKIO_RUNTIME.spawn(async move {
-                use crate::utils::ack::AckConfig;
-                let config =  AckConfig::default();
-                sleep(Duration::from_millis(config.delay_duration_ms)).await;
-
-                let mut msg_clone = message.clone();
-                match msg_clone.shipment_status {
-                    MessageStatus::Sent(tx,_)| MessageStatus::Received(tx, _) => msg_clone.shipment_status = MessageStatus::Received(tx, chrono::Utc::now()),
+        #[cfg(feature = "delayed_ack")]
+        {
+            let mut msg_clone = message.clone();
+            match msg_clone.shipment_status {
+                MessageStatus::Sent(tx, _) | MessageStatus::Received(tx, _) => {
+                    msg_clone.shipment_status = MessageStatus::Received(tx, chrono::Utc::now())
                 }
-                model.add_message(msg_clone, MessageDirection::Received);
-            });
+            }
+            model.add_message(msg_clone, MessageDirection::Received);
         }
+
         #[cfg(not(feature = "delayed_ack"))]
         model.add_message(message, MessageDirection::Received);
     }
 
-    fn on_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+    fn on_ack_received(
+        &self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: chrono::DateTime<chrono::Utc>,
+    ) {
         let mut model = self.lock().unwrap();
         if model.update_message_with_ack(message_uuid, is_read, ack_time) {
-            println!("Updated message {} with ACK (read: {})", message_uuid, is_read);
+            println!(
+                "Updated message {} with ACK (read: {})",
+                message_uuid, is_read
+            );
             // Trigger UI update
             model.notify_observers(AppEvent::MessageSent("Message status updated".to_string()));
         } else {
@@ -181,7 +196,7 @@ pub struct MessagePanel {
     pub message_to_send: String,
     pub forging_receiver: Peer,
     pub send_status: Option<String>,
-    pub pbat_enabled : bool,
+    pub pbat_enabled: bool,
 }
 
 pub struct ChatApp {
@@ -204,7 +219,7 @@ impl ChatApp {
                 message_to_send: String::new(),
                 forging_receiver,
                 send_status: None,
-                pbat_enabled : false,
+                pbat_enabled: false,
             },
         };
         return app;

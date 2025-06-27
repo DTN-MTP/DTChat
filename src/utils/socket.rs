@@ -1,4 +1,4 @@
-use crate::utils::ack;
+use crate::utils::ack::{self, AckConfig};
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message, DeserializedMessage};
@@ -11,6 +11,8 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
 const AF_BP: c_int = 28;
 
@@ -43,9 +45,9 @@ impl Endpoint {
             }
             Endpoint::Bp(addr) => {
                 // Check if it's not a placeholder and follows basic BP EID format
-                !addr.contains("PLACEHOLDER") && 
-                !addr.is_empty() && 
-                (addr.starts_with("ipn:") || addr.starts_with("dtn:"))
+                !addr.contains("PLACEHOLDER")
+                    && !addr.is_empty()
+                    && (addr.starts_with("ipn:") || addr.starts_with("dtn:"))
             }
         }
     }
@@ -64,7 +66,10 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     if eid_string.contains("PLACEHOLDER") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Cannot create socket with placeholder address: {}", eid_string),
+            format!(
+                "Cannot create socket with placeholder address: {}",
+                eid_string
+            ),
         ));
     }
 
@@ -216,7 +221,6 @@ impl GenericSocket {
                                         } else {
                                             Endpoint::Udp(address_clone.clone())
                                         };
-                                        
                                         if let Some(deserialized) =
                                             deserialize_message(&buffer[..size], &peers)
                                         {
@@ -224,6 +228,14 @@ impl GenericSocket {
                                             DeserializedMessage::ChatMessage(message) => {
                                                 println!("📨 Received message: '{}' from {}", message.text, message.sender.name);
                                                 controller.send_ack_if_needed_with_endpoint_info(&message, Some(&endpoint_type));
+                                                 #[cfg(feature = "delayed_ack")] {
+                                                    let ctrl_clone = new_controller_arc.clone();
+                                                    TOKIO_RUNTIME.spawn(async move {
+                                                        sleep(Duration::from_millis(AckConfig::default().delay_duration_ms)).await;
+                                                        ctrl_clone.lock().unwrap().notify_observers(message);
+                                                    });
+                                                }
+                                                #[cfg(not(feature = "delayed_ack"))]
                                                 controller.notify_observers(message);
                                             }
                                             DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
@@ -273,7 +285,6 @@ impl GenericSocket {
                     }
                 });
             }
-   
         }
 
         Ok(())
@@ -298,13 +309,37 @@ async fn handle_tcp_connection(
             if let Some(deserialized) = deserialize_message(buffer_slice, &peers) {
                 match deserialized {
                     DeserializedMessage::ChatMessage(message) => {
-                        println!("📨 TCP Received message: '{}' from {}", message.text, message.sender.name);
-                        controller.send_ack_if_needed_with_endpoint_info(&message, tcp_endpoint.as_ref());
+                        println!(
+                            "📨 TCP Received message: '{}' from {}",
+                            message.text, message.sender.name
+                        );
+                        controller
+                            .send_ack_if_needed_with_endpoint_info(&message, tcp_endpoint.as_ref());
+                        #[cfg(feature = "delayed_ack")]
+                        {
+                            let ctrl_clone = new_controller_arc.clone();
+                            TOKIO_RUNTIME.spawn(async move {
+                                sleep(Duration::from_millis(
+                                    AckConfig::default().delay_duration_ms,
+                                ))
+                                .await;
+                                ctrl_clone.lock().unwrap().notify_observers(message);
+                            });
+                        }
+                        #[cfg(not(feature = "delayed_ack"))]
                         controller.notify_observers(message);
                     }
-                    DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
-                        println!("✅ TCP Received ACK for message {} (read: {}) at {}", 
-                            message_uuid, is_read, ack_time.format("%H:%M:%S"));
+                    DeserializedMessage::Ack {
+                        message_uuid,
+                        is_read,
+                        ack_time,
+                    } => {
+                        println!(
+                            "✅ TCP Received ACK for message {} (read: {}) at {}",
+                            message_uuid,
+                            is_read,
+                            ack_time.format("%H:%M:%S")
+                        );
                         controller.handle_ack_received(&message_uuid, is_read, ack_time);
                     }
                 }
@@ -318,7 +353,12 @@ async fn handle_tcp_connection(
 
 pub trait SocketObserver: Send + Sync {
     fn on_socket_event(&self, message: ChatMessage);
-    fn on_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+    fn on_ack_received(
+        &self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: chrono::DateTime<chrono::Utc>,
+    ) {
         // Default implementation does nothing
         let _ = (message_uuid, is_read, ack_time);
     }
@@ -361,7 +401,11 @@ impl DefaultSocketController {
         self.local_peer = Some(peer);
     }
 
-    pub fn send_ack_if_needed_with_endpoint_info(&self, message: &ChatMessage, received_on_endpoint: Option<&Endpoint>) {
+    pub fn send_ack_if_needed_with_endpoint_info(
+        &self,
+        message: &ChatMessage,
+        received_on_endpoint: Option<&Endpoint>,
+    ) {
         if message.text.starts_with("[ACK]") {
             return;
         }
@@ -377,14 +421,21 @@ impl DefaultSocketController {
             }
 
             if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
-                println!("✅ Found sender peer: {} (UUID: {})", sender_peer.name, sender_peer.uuid);
-                
+                println!(
+                    "✅ Found sender peer: {} (UUID: {})",
+                    sender_peer.name, sender_peer.uuid
+                );
+
                 let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
-                println!("🎯 Sending ACK to {} via {}", sender_peer.name, target_endpoint.to_string());
-                
+                println!(
+                    "🎯 Sending ACK to {} via {}",
+                    sender_peer.name,
+                    target_endpoint.to_string()
+                );
+
                 let msg_clone = message.clone();
                 let local_peer_uuid = local_peer.uuid.clone();
-                
+
                 // Send ACK to the chosen endpoint
                 ack::send_ack_message_non_blocking(
                     &msg_clone,
@@ -400,39 +451,60 @@ impl DefaultSocketController {
                     None,  // Use default config
                 );
             } else {
-                println!("❌ Sender peer {} not found in peer list", message.sender.uuid);
-                println!("📋 Available peer UUIDs: {:?}", self.peers.iter().map(|p| &p.uuid).collect::<Vec<_>>());
-
+                println!(
+                    "❌ Sender peer {} not found in peer list",
+                    message.sender.uuid
+                );
+                println!(
+                    "📋 Available peer UUIDs: {:?}",
+                    self.peers.iter().map(|p| &p.uuid).collect::<Vec<_>>()
+                );
             }
         }
     }
 
-    fn choose_ack_endpoint(&self, sender_peer: &Peer, received_on_endpoint: Option<&Endpoint>) -> Endpoint {
+    fn choose_ack_endpoint(
+        &self,
+        sender_peer: &Peer,
+        received_on_endpoint: Option<&Endpoint>,
+    ) -> Endpoint {
         // If we know which endpoint the message was received on, try to find a compatible one
         if let Some(received_endpoint) = received_on_endpoint {
             // For BP messages, prefer BP endpoints for ACK
             if matches!(received_endpoint, Endpoint::Bp(_)) {
-                if let Some(bp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Bp(_))) {
+                if let Some(bp_endpoint) = sender_peer
+                    .endpoints
+                    .iter()
+                    .find(|ep| matches!(ep, Endpoint::Bp(_)))
+                {
                     return bp_endpoint.clone();
                 }
             }
-            
+
             // For TCP/UDP, try to use the same protocol if available
             match received_endpoint {
                 Endpoint::Tcp(_) => {
-                    if let Some(tcp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Tcp(_))) {
+                    if let Some(tcp_endpoint) = sender_peer
+                        .endpoints
+                        .iter()
+                        .find(|ep| matches!(ep, Endpoint::Tcp(_)))
+                    {
                         return tcp_endpoint.clone();
                     }
                 }
                 Endpoint::Udp(_) => {
-                    if let Some(udp_endpoint) = sender_peer.endpoints.iter().find(|ep| matches!(ep, Endpoint::Udp(_))) {
+                    if let Some(udp_endpoint) = sender_peer
+                        .endpoints
+                        .iter()
+                        .find(|ep| matches!(ep, Endpoint::Udp(_)))
+                    {
                         return udp_endpoint.clone();
                     }
                 }
                 _ => {}
             }
         }
-        
+
         // Fallback: prioritize BP > TCP > UDP for ACK reliability
         for endpoint in &sender_peer.endpoints {
             match endpoint {
@@ -452,9 +524,11 @@ impl DefaultSocketController {
                 _ => {}
             }
         }
-        
+
         // Ultimate fallback: first valid endpoint
-        sender_peer.endpoints.iter()
+        sender_peer
+            .endpoints
+            .iter()
             .find(|ep| ep.is_valid())
             .unwrap_or(&sender_peer.endpoints[0])
             .clone()
@@ -469,7 +543,12 @@ impl DefaultSocketController {
         }
     }
 
-    pub fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+    pub fn handle_ack_received(
+        &self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: chrono::DateTime<chrono::Utc>,
+    ) {
         println!("🔄 Processing ACK for message {}", message_uuid);
         // Notify observers about the ACK so they can update message status
         for observer in &self.observers {
@@ -497,10 +576,13 @@ impl DefaultSocketController {
             match GenericSocket::new(endpoint) {
                 Ok(mut sock) => {
                     if let Err(e) = sock.start_listener(controller_arc.clone()) {
-                        eprintln!("Failed to start listener for endpoint {:?}: {}", endpoint, e);
+                        eprintln!(
+                            "Failed to start listener for endpoint {:?}: {}",
+                            endpoint, e
+                        );
                         // Continue with next endpoint instead of failing completely
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("Failed to create socket for endpoint {:?}: {}", endpoint, e);
                     // Continue with next endpoint instead of failing

@@ -1,34 +1,33 @@
-use std::collections::HashMap;
-use std::sync::{RwLock, Mutex};
 use a_sabr::{
-    node::Node,
+    bundle::Bundle,
     contact::Contact,
-    node_manager::none::NoManagement,
     contact_manager::legacy::evl::EVLManager,
     contact_plan::from_ion_file::IONContactPlan,
-    routing::Router,
+    node::Node,
+    node_manager::none::NoManagement,
     routing::aliases::build_generic_router,
-    types::{NodeID, Date},
-    bundle::Bundle,
-    utils::pretty_print
+    routing::Router,
+    types::{Date, NodeID},
+    utils::pretty_print,
 };
-use chrono::{Timelike, Utc, DateTime, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, Timelike, Utc};
 use libc::UTIME_NOW;
+use std::collections::HashMap;
 use std::io;
+use std::sync::{Mutex, RwLock};
 
 use crate::utils::socket::Endpoint;
 
 pub struct prediction_config {
-    ion_to_node_id : RwLock<HashMap<String,NodeID>>,
-    router : Mutex<Box<dyn Router<NoManagement,EVLManager>+ Send + Sync>>,
-    cp_start_time : f64,
+    ion_to_node_id: RwLock<HashMap<String, NodeID>>,
+    router: Mutex<Box<dyn Router<NoManagement, EVLManager> + Send + Sync>>,
+    cp_start_time: f64,
 }
 
 impl prediction_config {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
-
         println!("RAW contact plan : ");
-        println!("{}",contact_plan);
+        println!("{}", contact_plan);
 
         let (nodes, contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
 
@@ -39,7 +38,7 @@ impl prediction_config {
             "CgrFirstEndingContactGraph",
             nodes,
             contacts,
-            None
+            None,
         );
 
         let router: Box<dyn Router<NoManagement, EVLManager> + Send + Sync> =
@@ -49,23 +48,21 @@ impl prediction_config {
 
         Ok(prediction_config {
             ion_to_node_id: RwLock::new(ion_to_node_id),
-            router : Mutex::new(router),
-            cp_start_time
+            router: Mutex::new(router),
+            cp_start_time,
         })
     }
 
-    pub fn get_node_id(&self,ion_id:&str) -> Option<NodeID>{
+    pub fn get_node_id(&self, ion_id: &str) -> Option<NodeID> {
         self.ion_to_node_id.read().unwrap().get(ion_id).copied()
     }
 
     pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
         let secs = timestamp.trunc() as i64;
         let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
-        let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
-            .expect("Invalid timestamp");
+        let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs).expect("Invalid timestamp");
         DateTime::<Utc>::from_utc(naive, Utc)
     }
-
 
     pub fn extract_ion_node_from_endpoint(endpoint: &Endpoint) -> Option<String> {
         match endpoint {
@@ -85,12 +82,9 @@ impl prediction_config {
                 }
                 Some(bp_address.clone())
             }
-            Endpoint::Udp(_) | Endpoint::Tcp(_) => {
-                None
-            }
+            Endpoint::Udp(_) | Endpoint::Tcp(_) => None,
         }
     }
-
 
     pub fn map_node_indices(contact_plan: &str) -> io::Result<HashMap<String, NodeID>> {
         let (nodes, _contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
@@ -102,20 +96,21 @@ impl prediction_config {
         Ok(node_index_map)
     }
 
-
     pub fn predict(&self, source_ion: &str, dest_ion: &str, message_size: f64) -> io::Result<Date> {
-
         let source_node_id = self.get_node_id(source_ion).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Source ION ID '{}' not found in contact plan", source_ion)
+                format!("Source ION ID '{}' not found in contact plan", source_ion),
             )
         })?;
 
         let dest_node_id = self.get_node_id(dest_ion).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Destination ION ID '{}' not found in contact plan", dest_ion)
+                format!(
+                    "Destination ION ID '{}' not found in contact plan",
+                    dest_ion
+                ),
             )
         })?;
 
@@ -137,7 +132,9 @@ impl prediction_config {
                 println!("Route found from ION {} to ION {}!", source_ion, dest_ion);
 
                 // Only display the last element
-                if let Some((_contact_ptr, (_contact, route_stages))) = routing_output.first_hops.iter().last() {
+                if let Some((_contact_ptr, (_contact, route_stages))) =
+                    routing_output.first_hops.iter().last()
+                {
                     if let Some(last_stage) = route_stages.last() {
                         // Create a borrow and use it consistently
                         let last_stage_borrowed = last_stage.borrow();
@@ -145,26 +142,32 @@ impl prediction_config {
                         let delay = last_stage_borrowed.at_time;
 
                         println!("#########################################################");
-                        println!("the cp_start_time in UTC is : {:?}", prediction_config::f64_to_utc(self.cp_start_time));
+                        println!(
+                            "the cp_start_time in UTC is : {:?}",
+                            prediction_config::f64_to_utc(self.cp_start_time)
+                        );
                         println!("cp_start_time is {}", self.cp_start_time);
                         println!("cp_send_time is {}", cp_send_time);
                         println!("delay is {}", delay);
                         println!("returned value is {}", delay + self.cp_start_time);
-                        println!("returned value in UTC is {:?}", prediction_config::f64_to_utc(delay + self.cp_start_time));
+                        println!(
+                            "returned value in UTC is {:?}",
+                            prediction_config::f64_to_utc(delay + self.cp_start_time)
+                        );
 
                         return Ok(delay + self.cp_start_time);
                     }
                 }
                 Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "Route found but no route stages available"
+                    "Route found but no route stages available",
                 ))
             }
             None => {
                 println!("No route found from ION {} to ION {}", source_ion, dest_ion);
                 Err(io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!("No route found from ION {} to ION {}", source_ion, dest_ion)
+                    format!("No route found from ION {} to ION {}", source_ion, dest_ion),
                 ))
             }
         }

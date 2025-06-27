@@ -14,7 +14,11 @@ pub use dtchat::chat_message::Content;
 #[derive(Debug)]
 pub enum DeserializedMessage {
     ChatMessage(ChatMessage),
-    Ack { message_uuid: String, is_read: bool, ack_time: DateTime<Utc> },
+    Ack {
+        message_uuid: String,
+        is_read: bool,
+        ack_time: DateTime<Utc>,
+    },
 }
 
 pub fn serialize_message(message: &ChatMessage) -> Bytes {
@@ -36,10 +40,10 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMes
     {
         use prost::Message;
 
-        let protobuf_length = buf[0] as usize;           // Read length from first byte
-        let clean_buf = &buf[1..1 + protobuf_length];   // Extract only protobuf data
+        let protobuf_length = buf[0] as usize; // Read length from first byte
+        let clean_buf = &buf[1..1 + protobuf_length]; // Extract only protobuf data
 
-        if let Ok(proto_msg) = dtchat::ChatMessage::decode(clean_buf){
+        if let Ok(proto_msg) = dtchat::ChatMessage::decode(clean_buf) {
             return extract_message_from_proto(proto_msg, peers);
         }
     }
@@ -49,7 +53,7 @@ pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMes
         let text = text.trim_end();
         if !text.is_empty() {
             let now = Utc::now();
-            
+
             // Check if this is an ACK message in debug mode
             if text.starts_with("[ACK]") {
                 // Parse ACK format: [ACK] message_uuid:is_read
@@ -95,7 +99,6 @@ pub fn generate_uuid() -> String {
 
 #[cfg(not(feature = "no_protobuf"))]
 fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
-
     let (tx_time, _, _) = message.get_timestamps();
 
     let content = {
@@ -116,7 +119,10 @@ fn construct_proto_message(message: &ChatMessage) -> dtchat::ChatMessage {
 }
 
 #[cfg(not(feature = "no_protobuf"))]
-fn extract_message_from_proto(proto: dtchat::ChatMessage, peers: &[Peer]) -> Option<DeserializedMessage> {
+fn extract_message_from_proto(
+    proto: dtchat::ChatMessage,
+    peers: &[Peer],
+) -> Option<DeserializedMessage> {
     use chrono::TimeZone;
 
     let sender = find_peer_by_id(peers, &proto.sender_uuid).unwrap_or_else(default_peer);

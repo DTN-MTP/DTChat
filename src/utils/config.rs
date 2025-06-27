@@ -46,7 +46,7 @@ pub struct AppConfigManager {
     pub peer_list: Vec<Peer>,
     pub local_peer: Peer,
     pub room_list: Vec<Room>,
-    pub a_sabr : String,
+    pub a_sabr: String,
 }
 
 impl AppConfigManager {
