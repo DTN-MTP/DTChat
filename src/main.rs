@@ -13,13 +13,23 @@ use utils::{
     socket::{DefaultSocketController, SocketController},
 };
 
+
+
 #[derive(Clone)]
 pub struct ArcChatApp {
     pub shared_app: Arc<Mutex<ChatApp>>,
 }
 
 fn main() -> Result<(), eframe::Error> {
-    let config = AppConfigManager::load_yaml_from_file("database.yaml");
+    let config_path = match std::env::var("DTCHAT_CONFIG") {
+        Ok(path) => path,
+        Err(_) => {
+            let default_path = "db/default.yaml".to_string();
+            println!("No DTCHAT_CONFIG environment variable found. Using default configuration: {}", default_path);
+            default_path
+        }
+    };
+    let config: AppConfigManager = AppConfigManager::load_yaml_from_file(&config_path);
 
     let shared_peers = config.peer_list;
     let shared_rooms = config.room_list;

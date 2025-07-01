@@ -1,0 +1,30 @@
+a_sabr : "../host.rc"
+local_peer:
+    uuid: 10
+    name: ion-10
+    endpoints:
+      - type: Bp
+        address: "ipn:10.0"
+    color: 2
+
+peer_list:
+  - uuid: 20
+    name: ud3tn-20
+    endpoints:
+      - type: Bp
+        address: "ipn:20.0"
+    color: 3
+
+
+room_list:
+  - uuid: 0
+    name: room 1
+    participants:
+      - 30
+      - 10
+
+  - uuid: 1
+    name: room 2
+    participants:
+      - 10
+      - 30

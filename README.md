@@ -61,36 +61,20 @@ cd DTChat
 # in the node VM Build the project
 cargo build --release
 
-# Run DTChat
-cargo run
+# Run DTChat with default configuration
+DTCHAT_CONFIG=./db/default.yaml  cargo run 
 ```
 
-### Configuration
+### Configuration (DTCHAT_CONFIG)
 
-After DTChat installation, make sure `database.yaml` is correct:
+Three different configuration files are available in the `db` directory:
+- `default.yaml`: Default configuration for local testing
+- `ion.yaml`: Example configuration for ion integration (dtchat-bp-socket-testing)
+- `ud3dtn.yaml`: Example configuration for ud3dtn integration(dtchat-bp-socket-testing)
 
 
-1. **Edit `database.yaml`**:
-```yaml
-# A-SABR contact plan file
-a_sabr: "../<conatct_plan>"
+**Configure contact plan (example)**:
 
-# Local peer configuration example
-local_peer:
-  uuid: 3
-  color: 3
-
-# Network peers example
-peer_list:
-  - uuid: "1"
-    name: "Node 10"
-    endpoint: "ipn:10.2"
-  - uuid: "2" 
-    name: "Node 30"
-    endpoint: "ipn:30.2"
-```
-
-2. **Configure contact plan (example)**:
 ```
 # ION Administration
 a contact +0 +86400 30 30 100000
@@ -106,7 +90,7 @@ a outduct tcp 192.168.50.30:4556 tcpclo
 
 ### Basic Chat
 
-1. **Start DTChat**: `cargo run`
+1. **Start DTChat**: `DTCHAT_CONFIG=./db/default.yaml cargo run`
 2. **Select a peer** from the dropdown menu
 3. **Click on the PBAT checkbox (optional)** to view delivery time prediction
 4. **Type your message** in the input field
