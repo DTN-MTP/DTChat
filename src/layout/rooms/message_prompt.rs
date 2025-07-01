@@ -11,6 +11,8 @@ use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
 use libc::{ARPHRD_ATM, UTIME_NOW};
+use std::env;
+use tokio::time::{sleep, Duration};
 
 // Parse the whole adress to ion_id
 fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
@@ -33,26 +35,44 @@ pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
 pub struct MessagePrompt {}
 
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
-    let socket = GenericSocket::new(&receiver.endpoints[0]);
-    println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
+       println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
-    match socket {
-        Ok(mut socket) => match socket.send_message(&msg) {
-            Ok(_) => {
-                let mut model_locked = model.lock().unwrap();
-                model_locked.add_message(msg.clone(), MessageDirection::Sent);
+    // Try to create the socket synchronously (assuming GenericSocket::new is sync)
+    match GenericSocket::new(&receiver.endpoints[0]) {
+        Ok(socket) => {
+            // Clone things to move into async task
+            let model_clone = Arc::clone(&model);
+            let msg_clone = msg.clone();
+
+            {
+                model_clone.lock().unwrap().add_message(msg.clone(), MessageDirection::Sent);
             }
-            Err(_) => model
-                .lock()
-                .unwrap()
-                .notify_observers(AppEvent::MessageError("Socket error.".to_string())),
-        },
-        Err(_) => model
-            .lock()
-            .unwrap()
-            .notify_observers(AppEvent::MessageError(
-                "Socket initialization failed.".to_string(),
-            )),
+
+            // Spawn async task to send the message in background
+            TOKIO_RUNTIME.spawn(async move {
+                let mut socket = socket; // mutable socket for sending
+
+                #[cfg(feature = "delayed_ack")]
+                {
+                    // We delay the send to have a delayed ack, the message is still displayed instantly
+                    let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
+                                .ok()
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(500); // Default to 500ms
+                    println!("delayed_ack : waiting {} seconds before send", delay_ms);
+                    sleep(Duration::from_millis(delay_ms)).await;
+                }
+
+                if let Err(e) = socket.send_message(&msg_clone) {
+                    // On error, notify observers
+                    model_clone.lock().unwrap().notify_observers(AppEvent::MessageError(format!("Socket error: {}", e)));
+                }
+            });
+        }
+
+        Err(_) => {
+            model.lock().unwrap().notify_observers(AppEvent::MessageError("Socket initialization failed.".to_string()));
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::utils::ack::{self, AckConfig};
+use crate::utils::ack::{self};
 use crate::utils::config::Peer;
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::{deserialize_message, serialize_message, DeserializedMessage};
@@ -6,7 +6,7 @@ use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::io::{self, Bytes, Error, ErrorKind, Read, Write};
 use std::mem::ManuallyDrop;
 use std::{ptr, mem};
 use std::sync::{Arc, Mutex};
@@ -224,12 +224,12 @@ impl GenericSocket {
                 TOKIO_RUNTIME.spawn_blocking({
                     let mut socket = self.socket.try_clone()?; // Clone the socket for the async thread
                     move || {
-                        let mut buffer: [u8; 1024] = [0; 1024];
                         loop {
+                            let mut buffer: [u8; 1024] = [0; 1024];
                             match socket.read(&mut buffer) {
                                 Ok(size) => {
                                     println!(
-                                        "UDP/BP received data on listening address {}",
+                                        "UDP/BP received {} bytes on listening address {}", size,
                                         address
                                     );
                                     let new_controller_arc = Arc::clone(&controller_arc);
@@ -243,20 +243,12 @@ impl GenericSocket {
                                             Endpoint::Udp(address_clone.clone())
                                         };
                                         if let Some(deserialized) =
-                                            deserialize_message(&buffer[..size], &peers)
+                                            deserialize_message(&buffer, &peers)
                                         {
                                             match deserialized {
                                             DeserializedMessage::ChatMessage(message) => {
                                                 println!("📨 Received message: '{}' from {}", message.text, message.sender.name);
                                                 controller.send_ack_if_needed_with_endpoint_info(&message, Some(&endpoint_type));
-                                                 #[cfg(feature = "delayed_ack")] {
-                                                    let ctrl_clone = new_controller_arc.clone();
-                                                    TOKIO_RUNTIME.spawn(async move {
-                                                        sleep(Duration::from_millis(AckConfig::default().delay_duration_ms)).await;
-                                                        ctrl_clone.lock().unwrap().notify_observers(message);
-                                                    });
-                                                }
-                                                #[cfg(not(feature = "delayed_ack"))]
                                                 controller.notify_observers(message);
                                             }
                                             DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
@@ -319,7 +311,6 @@ async fn handle_tcp_connection(
     let mut buffer = [0; 1024];
     match stream.read(&mut buffer) {
         Ok(size) => {
-            let buffer_slice = &buffer[..size];
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
 
@@ -327,7 +318,7 @@ async fn handle_tcp_connection(
             let peer_addr = stream.peer_addr().ok();
             let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
 
-            if let Some(deserialized) = deserialize_message(buffer_slice, &peers) {
+            if let Some(deserialized) = deserialize_message(&buffer, &peers) {
                 match deserialized {
                     DeserializedMessage::ChatMessage(message) => {
                         println!(
@@ -336,18 +327,6 @@ async fn handle_tcp_connection(
                         );
                         controller
                             .send_ack_if_needed_with_endpoint_info(&message, tcp_endpoint.as_ref());
-                        #[cfg(feature = "delayed_ack")]
-                        {
-                            let ctrl_clone = controller_arc.clone();
-                            TOKIO_RUNTIME.spawn(async move {
-                                sleep(Duration::from_millis(
-                                    AckConfig::default().delay_duration_ms,
-                                ))
-                                .await;
-                                ctrl_clone.lock().unwrap().notify_observers(message);
-                            });
-                        }
-                        #[cfg(not(feature = "delayed_ack"))]
                         controller.notify_observers(message);
                     }
                     DeserializedMessage::Ack {
@@ -469,7 +448,6 @@ impl DefaultSocketController {
                     },
                     &local_peer_uuid,
                     false, // Not read yet, just received
-                    None,  // Use default config
                 );
             } else {
                 println!(

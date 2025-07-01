@@ -24,7 +24,6 @@ a_sabr = {path = "A-SABR", features = ["contact_work_area", "contact_suppression
 bp = []
 dev = []
 delayed_ack = []
-no_protobuf = []
 
 [build-dependencies]
 prost-build = "0.14.1"
