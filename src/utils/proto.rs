@@ -32,7 +32,7 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
 
     use prost::Message;
-    if let Ok(proto_msg) = proto::ProtoMessage::decode(&buf[1..((buf[0] as usize) + 1)]) {
+    if let Ok(proto_msg) = proto::ProtoMessage::decode(buf) {
         return extract_message_from_proto(proto_msg, peers);
     }
     None

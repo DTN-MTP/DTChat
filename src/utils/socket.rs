@@ -232,6 +232,10 @@ impl GenericSocket {
                                         "UDP/BP received {} bytes on listening address {}", size,
                                         address
                                     );
+                                     for b in &buffer[0..size] {
+                                        print!("{} ", b);
+                                     }println!("");
+                                     
                                     let new_controller_arc = Arc::clone(&controller_arc);
                                     let address_clone = address.clone();
                                     TOKIO_RUNTIME.spawn(async move {
@@ -243,7 +247,7 @@ impl GenericSocket {
                                             Endpoint::Udp(address_clone.clone())
                                         };
                                         if let Some(deserialized) =
-                                            deserialize_message(&buffer, &peers)
+                                            deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers)
                                         {
                                             match deserialized {
                                             DeserializedMessage::ChatMessage(message) => {
@@ -318,7 +322,7 @@ async fn handle_tcp_connection(
             let peer_addr = stream.peer_addr().ok();
             let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
 
-            if let Some(deserialized) = deserialize_message(&buffer, &peers) {
+            if let Some(deserialized) = deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers){
                 match deserialized {
                     DeserializedMessage::ChatMessage(message) => {
                         println!(
@@ -607,6 +611,10 @@ impl SendingSocket for GenericSocket {
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let serialized = serialize_message(message);
         self.send(&serialized)?;
+        println!("serialized: {} bytes", serialized.len());
+        for b in &serialized {
+            print!("{} ", b);
+        }println!("");
         Ok(serialized.len())
     }
 }
