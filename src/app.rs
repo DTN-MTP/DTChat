@@ -3,9 +3,9 @@ use crate::layout::rooms::message_settings_bar::RoomView;
 use crate::layout::ui::display;
 use crate::utils::config::{Peer, Room};
 use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::prediction_config::prediction_config;
+use crate::utils::prediction_config::PredictionConfig;
 use crate::utils::socket::SocketObserver;
-use chrono::{DateTime, Duration, Local, Utc};
+use chrono::{DateTime, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -26,11 +26,11 @@ pub enum SortStrategy {
 
 fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx, rx) => (tx, tx),
+        MessageStatus::Sent(tx, _rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx, rx) => (tx, tx),
+        MessageStatus::Sent(tx, _rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     tx_a.cmp(tx_b).then(rx_a.cmp(rx_b))
@@ -38,11 +38,11 @@ fn standard_cmp(a: &ChatMessage, b: &ChatMessage) -> Ordering {
 
 fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Ordering {
     let (tx_a, rx_a) = match &a.shipment_status {
-        MessageStatus::Sent(tx, rx) => (tx, tx),
+        MessageStatus::Sent(tx, _rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let (tx_b, rx_b) = match &b.shipment_status {
-        MessageStatus::Sent(tx, rx) => (tx, tx),
+        MessageStatus::Sent(tx, _rx) => (tx, tx),
         MessageStatus::Received(tx, rx) => (tx, rx),
     };
     let anchor_a = if a.sender.uuid == ctx_peer_uuid {
@@ -65,7 +65,7 @@ pub struct ChatModel {
     pub rooms: Vec<Room>,
     pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
-    pub prediction_config: Option<prediction_config>,
+    pub prediction_config: Option<PredictionConfig>,
 }
 
 pub enum MessageDirection {
@@ -78,7 +78,7 @@ impl ChatModel {
         peers: Vec<Peer>,
         localpeer: Peer,
         rooms: Vec<Room>,
-        prediction_config: Option<prediction_config>,
+        prediction_config: Option<PredictionConfig>,
     ) -> Self {
         Self {
             sort_strategy: SortStrategy::Standard,

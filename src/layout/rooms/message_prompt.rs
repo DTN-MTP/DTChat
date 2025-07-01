@@ -1,18 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection, MessagePanel};
+use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection};
 use crate::utils::colors::COLORS;
 use crate::utils::config::Peer;
 use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::prediction_config::prediction_config;
 use crate::utils::proto::generate_uuid;
 use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket, TOKIO_RUNTIME};
-use chrono::{DateTime, Local, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
-use libc::{ARPHRD_ATM, UTIME_NOW};
-use std::env;
-use tokio::time::{sleep, Duration};
 
 // Parse the whole adress to ion_id
 fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
@@ -28,14 +24,14 @@ fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
 pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
     let secs = timestamp.trunc() as i64;
     let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
-    let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs).expect("Invalid timestamp");
-    DateTime::<Utc>::from_utc(naive, Utc)
+    let naive = DateTime::from_timestamp(secs, nsecs).expect("Invalid timestamp");
+    DateTime::from_naive_utc_and_offset(naive.naive_utc(), Utc)
 }
 
 pub struct MessagePrompt {}
 
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
-       println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
+    println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
     // Try to create the socket synchronously (assuming GenericSocket::new is sync)
     match GenericSocket::new(&receiver.endpoints[0]) {
@@ -45,7 +41,10 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
             let msg_clone = msg.clone();
 
             {
-                model_clone.lock().unwrap().add_message(msg.clone(), MessageDirection::Sent);
+                model_clone
+                    .lock()
+                    .unwrap()
+                    .add_message(msg.clone(), MessageDirection::Sent);
             }
 
             // Spawn async task to send the message in background
@@ -56,22 +55,30 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
                 {
                     // We delay the send to have a delayed ack, the message is still displayed instantly
                     let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
-                                .ok()
-                                .and_then(|s| s.parse().ok())
-                                .unwrap_or(500); // Default to 500ms
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(500); // Default to 500ms
                     println!("delayed_ack : waiting {} seconds before send", delay_ms);
                     sleep(Duration::from_millis(delay_ms)).await;
                 }
 
                 if let Err(e) = socket.send_message(&msg_clone) {
                     // On error, notify observers
-                    model_clone.lock().unwrap().notify_observers(AppEvent::MessageError(format!("Socket error: {}", e)));
+                    model_clone
+                        .lock()
+                        .unwrap()
+                        .notify_observers(AppEvent::MessageError(format!("Socket error: {}", e)));
                 }
             });
         }
 
         Err(_) => {
-            model.lock().unwrap().notify_observers(AppEvent::MessageError("Socket initialization failed.".to_string()));
+            model
+                .lock()
+                .unwrap()
+                .notify_observers(AppEvent::MessageError(
+                    "Socket initialization failed.".to_string(),
+                ));
         }
     }
 }
@@ -132,7 +139,7 @@ impl MessagePrompt {
                 let mut prediction_time: Option<DateTime<Utc>> = None;
 
                 // Do the prediction here
-                if (app.message_panel.pbat_enabled) {
+                if app.message_panel.pbat_enabled {
                     let sender_ion_id = {
                         let model_lock = app.model_arc.lock().unwrap();
                         let sender = &model_lock.localpeer;

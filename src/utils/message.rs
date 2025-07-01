@@ -67,7 +67,7 @@ impl ChatMessage {
     /// Update message status when ACK is received
     pub fn update_with_ack(&mut self, _is_read: bool, ack_time: DateTime<Utc>) {
         match self.shipment_status {
-            MessageStatus::Sent(sent_time, pbat) => {
+            MessageStatus::Sent(sent_time, _pbat) => {
                 // For now, we only distinguish between sent and acknowledged
                 self.shipment_status = MessageStatus::Received(sent_time, ack_time);
             }

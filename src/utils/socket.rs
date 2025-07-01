@@ -6,14 +6,12 @@ use libc::{self, c_int};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
-use std::io::{self, Bytes, Error, ErrorKind, Read, Write};
+use std::io::{self, Error, ErrorKind, Read, Write};
 use std::mem::ManuallyDrop;
 use std::{ptr, mem};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::runtime::Runtime;
-use tokio::time::sleep;
-use tokio::time::Duration;
 
 const AF_BP: c_int = 28;
 
@@ -54,18 +52,9 @@ impl Endpoint {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-
-struct SockAddrBp {
-    bp_family: libc::sa_family_t,
-    eid_str: [u8; 126],
-}
-
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
 
     const BP_SCHEME_IPN: u32 = 1;
-    const BP_SCHEME_DTN: u32 = 2;
 
     #[repr(C)]
     struct SockAddrBp {
@@ -314,7 +303,7 @@ async fn handle_tcp_connection(
 ) {
     let mut buffer = [0; 1024];
     match stream.read(&mut buffer) {
-        Ok(size) => {
+        Ok(_size) => {
             let controller = controller_arc.lock().unwrap();
             let peers = controller.get_peers();
 
