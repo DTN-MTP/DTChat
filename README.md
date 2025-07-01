@@ -49,6 +49,7 @@ DTChat/
 - **Rust 1.70+**: [Install Rust](https://rustup.rs/)
 - **ION-DTN or bp-socket**: Bundle Protocol daemon
 - **Git**: For submodule support
+- [Protobuf](https://protobuf.dev/installation/)
 
 ### Installation
 

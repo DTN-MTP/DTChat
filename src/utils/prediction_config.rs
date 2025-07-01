@@ -1,30 +1,26 @@
 use a_sabr::{
     bundle::Bundle,
-    contact::Contact,
     contact_manager::legacy::evl::EVLManager,
     contact_plan::from_ion_file::IONContactPlan,
-    node::Node,
     node_manager::none::NoManagement,
     routing::aliases::build_generic_router,
     routing::Router,
     types::{Date, NodeID},
-    utils::pretty_print,
 };
-use chrono::{DateTime, NaiveDateTime, Timelike, Utc};
-use libc::UTIME_NOW;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::io;
 use std::sync::{Mutex, RwLock};
 
 use crate::utils::socket::Endpoint;
 
-pub struct prediction_config {
+pub struct PredictionConfig {
     ion_to_node_id: RwLock<HashMap<String, NodeID>>,
     router: Mutex<Box<dyn Router<NoManagement, EVLManager> + Send + Sync>>,
     cp_start_time: f64,
 }
 
-impl prediction_config {
+impl PredictionConfig {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
         println!("RAW contact plan : ");
         println!("{}", contact_plan);
@@ -46,7 +42,7 @@ impl prediction_config {
 
         let cp_start_time = Utc::now().timestamp() as f64;
 
-        Ok(prediction_config {
+        Ok(PredictionConfig {
             ion_to_node_id: RwLock::new(ion_to_node_id),
             router: Mutex::new(router),
             cp_start_time,
@@ -60,8 +56,8 @@ impl prediction_config {
     pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
         let secs = timestamp.trunc() as i64;
         let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
-        let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs).expect("Invalid timestamp");
-        DateTime::<Utc>::from_utc(naive, Utc)
+        let naive = DateTime::from_timestamp(secs, nsecs).expect("Invalid timestamp");
+        DateTime::from_naive_utc_and_offset(naive.naive_utc(), Utc)
     }
 
     pub fn extract_ion_node_from_endpoint(endpoint: &Endpoint) -> Option<String> {
@@ -144,7 +140,7 @@ impl prediction_config {
                         println!("#########################################################");
                         println!(
                             "the cp_start_time in UTC is : {:?}",
-                            prediction_config::f64_to_utc(self.cp_start_time)
+                            PredictionConfig::f64_to_utc(self.cp_start_time)
                         );
                         println!("cp_start_time is {}", self.cp_start_time);
                         println!("cp_send_time is {}", cp_send_time);
@@ -152,7 +148,7 @@ impl prediction_config {
                         println!("returned value is {}", delay + self.cp_start_time);
                         println!(
                             "returned value in UTC is {:?}",
-                            prediction_config::f64_to_utc(delay + self.cp_start_time)
+                            PredictionConfig::f64_to_utc(delay + self.cp_start_time)
                         );
 
                         return Ok(delay + self.cp_start_time);

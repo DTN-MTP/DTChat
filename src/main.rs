@@ -9,10 +9,8 @@ use chrono::{Duration, Utc};
 
 use utils::{
     config::AppConfigManager,
-    message::{ChatMessage, MessageStatus},
-    prediction_config::prediction_config,
-    proto::generate_uuid,
-    socket::{DefaultSocketController, SocketController, SocketObserver},
+    prediction_config::PredictionConfig,
+    socket::{DefaultSocketController, SocketController},
 };
 
 #[derive(Clone)]
@@ -34,7 +32,7 @@ fn main() -> Result<(), eframe::Error> {
 
     let _now = Utc::now() - Duration::seconds(40);
 
-    let prediction_config = match prediction_config::new(&contact_plan) {
+    let prediction_config = match PredictionConfig::new(&contact_plan) {
         Ok(config) => Some(config),
         Err(e) => {
             eprintln!("Failed to create prediction_config: {}", e);
@@ -42,7 +40,7 @@ fn main() -> Result<(), eframe::Error> {
         }
     };
 
-    let mut model = ChatModel::new(
+    let model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
         shared_rooms.clone(),
