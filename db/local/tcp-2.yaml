@@ -1,0 +1,24 @@
+a_sabr: ../host.rc"
+local_peer:
+  uuid: 2
+  name: Instance 2
+  endpoints:
+    - type: Tcp
+      address: 127.0.0.1:7002
+  color: 1
+
+peer_list:
+  - uuid: 1
+    name: Instance 1
+    endpoints:
+      - type: Tcp
+        address: "127.0.0.1:7001"
+    color: 0
+
+room_list:
+  - uuid: 1
+    name: Test Room
+    participants:
+      - instance1
+      - instance2
+      

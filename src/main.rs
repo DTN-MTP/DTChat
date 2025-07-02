@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 mod app;
 mod layout;
+mod network;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
@@ -12,8 +13,9 @@ use chrono::{Duration, Utc};
 use utils::{
     config::AppConfigManager,
     prediction_config::PredictionConfig,
-    socket::{DefaultSocketController, SocketController},
 };
+
+use network::{NetworkEngine, SocketController};
 
 #[cfg(feature = "dev")]
 use utils::{
@@ -138,12 +140,16 @@ fn main() -> Result<(), eframe::Error> {
 
     let model_arc = Arc::new(Mutex::new(model));
 
-    match DefaultSocketController::init_controller(local_peer.clone(), shared_peers.clone()) {
-        Ok(controller) => {
-            controller.lock().unwrap().add_observer(model_arc.clone());
+    match NetworkEngine::new(local_peer.clone(), shared_peers.clone()) {
+        Ok(engine) => {
+            let engine_arc = Arc::new(Mutex::new(engine));
+            engine_arc.lock().unwrap().add_observer(model_arc.clone());
+            
+            // Store the engine for the app to use
+            model_arc.lock().unwrap().set_network_engine(engine_arc.clone());
         }
         Err(e) => {
-            eprintln!("Failed to initialize socket controller: {e:?}");
+            eprintln!("Failed to initialize network engine: {e:?}");
         }
     }
 

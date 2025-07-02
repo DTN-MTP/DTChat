@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 
-use super::socket::Endpoint;
+use super::super::network::Endpoint;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Peer {

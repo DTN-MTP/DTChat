@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::io;
 use std::sync::{Mutex, RwLock};
 
-use crate::utils::socket::Endpoint;
+use crate::network::Endpoint;
 
 pub struct PredictionConfig {
     ion_to_node_id: RwLock<HashMap<String, NodeID>>,

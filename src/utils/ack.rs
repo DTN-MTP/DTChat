@@ -2,7 +2,7 @@ use crate::utils::message::ChatMessage;
 use crate::utils::proto::dtchat_proto::proto_message::Content;
 use crate::utils::proto::dtchat_proto::DeliveryStatus;
 use crate::utils::proto::{dtchat_proto, generate_uuid};
-use crate::utils::socket::{self, GenericSocket};
+use crate::network::socket::{GenericSocket, TOKIO_RUNTIME};
 
 pub type AckResult<T> = Result<T, AckError>;
 
@@ -72,7 +72,7 @@ pub async fn send_ack_message(
             );
             Ok(())
         }
-        Err(e) => Err(AckError::Network(e)),
+        Err(e) => Err(AckError::Network(Box::new(e))),
     }
 }
 
@@ -86,7 +86,7 @@ pub fn send_ack_message_non_blocking(
     let mut socket_clone = socket.clone();
     let local_peer_uuid_clone = local_peer_uuid.to_string();
 
-    socket::TOKIO_RUNTIME.spawn(async move {
+    TOKIO_RUNTIME.spawn(async move {
         if let Err(e) = send_ack_message(
             &msg_clone,
             &mut socket_clone,

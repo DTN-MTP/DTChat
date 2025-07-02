@@ -31,10 +31,19 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
     use prost::Message;
-    if let Ok(proto_msg) = dtchat_proto::ProtoMessage::decode(buf) {
-        return extract_message_from_proto(proto_msg, peers);
+    println!("🔍 Attempting to decode protobuf message of {} bytes", buf.len());
+    match dtchat_proto::ProtoMessage::decode(buf) {
+        Ok(proto_msg) => {
+            // If the message is successfully decoded, extract the relevant information
+            println!("✅ Deserialized message: {:?}", proto_msg);
+            extract_message_from_proto(proto_msg, peers)
+        }
+        Err(e) => {
+            println!("❌ Failed to decode protobuf message: {:?}", e);
+            println!("❌ Buffer content: {:?}", buf);
+            None
+        }
     }
-    None
 }
 
 fn find_peer_by_id(peers: &[Peer], id: &str) -> Option<Peer> {

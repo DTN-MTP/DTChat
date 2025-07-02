@@ -5,7 +5,8 @@ use crate::utils::colors::COLORS;
 use crate::utils::config::Peer;
 use crate::utils::message::{ChatMessage, MessageStatus};
 use crate::utils::proto::generate_uuid;
-use crate::utils::socket::{Endpoint, GenericSocket, SendingSocket, TOKIO_RUNTIME};
+use crate::network::Endpoint;
+use crate::network::socket::TOKIO_RUNTIME;
 use chrono::{DateTime, Utc};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
@@ -32,54 +33,56 @@ pub struct MessagePrompt {}
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
     println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
-    // Try to create the socket synchronously (assuming GenericSocket::new is sync)
-    match GenericSocket::new(&receiver.endpoints[0]) {
-        Ok(socket) => {
-            // Clone things to move into async task
-            let model_clone = Arc::clone(&model);
-            let msg_clone = msg.clone();
-
-            {
-                model_clone
-                    .lock()
-                    .unwrap()
-                    .add_message(msg.clone(), MessageDirection::Sent);
+    // Get the NetworkEngine from the model
+    let network_engine = {
+        let model_guard = model.lock().unwrap();
+        match model_guard.get_network_engine() {
+            Some(engine) => engine,
+            None => {
+                model_guard.notify_observers(AppEvent::Error("Network engine not available".to_string()));
+                return;
             }
+        }
+    };
 
-            // Spawn async task to send the message in background
-            TOKIO_RUNTIME.spawn(async move {
-                let mut socket = socket; // mutable socket for sending
+    // Clone things to move into async task
+    let model_clone = Arc::clone(&model);
+    let msg_clone = msg.clone();
+    let receiver_uuid = receiver.uuid.clone();
 
-                #[cfg(feature = "delayed_ack")]
-                {
-                    use std::env;
-                    use tokio::time::{sleep, Duration};
-                    // We delay the send to have a delayed ack, the message is still displayed instantly
-                    let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(500); // Default to 500ms
-                    println!("delayed_ack : waiting {delay_ms} seconds before send");
-                    sleep(Duration::from_millis(delay_ms)).await;
-                }
+    {
+        model_clone
+            .lock()
+            .unwrap()
+            .add_message(msg.clone(), MessageDirection::Sent);
+    }
 
-                if let Err(e) = socket.send_message(&msg_clone) {
-                    // On error, notify observers
-                    model_clone
-                        .lock()
-                        .unwrap()
-                        .notify_observers(AppEvent::Error(format!("Socket error: {e}")));
-                }
-            });
+    // Spawn blocking task for network operations
+    TOKIO_RUNTIME.spawn_blocking(move || {
+        #[cfg(feature = "delayed_ack")]
+        {
+            use std::env;
+            use std::thread;
+            use std::time::Duration;
+            // We delay the send to have a delayed ack, the message is still displayed instantly
+            let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(500); // Default to 500ms
+            println!("delayed_ack : waiting {delay_ms} ms before send");
+            thread::sleep(Duration::from_millis(delay_ms));
         }
 
-        Err(_) => {
-            model
+        // Use NetworkEngine to send the message
+        let engine = network_engine.lock().unwrap();
+        if let Err(e) = engine.send_message_to_peer(&msg_clone, &receiver_uuid) {
+            // On error, notify observers
+            model_clone
                 .lock()
                 .unwrap()
-                .notify_observers(AppEvent::Error("Socket initialization failed.".to_string()));
+                .notify_observers(AppEvent::Error(format!("Network error: {}", e)));
         }
-    }
+    });
 }
 
 impl MessagePrompt {
@@ -179,6 +182,8 @@ impl MessagePrompt {
                     text: app.message_panel.message_to_send.clone(),
                     shipment_status: MessageStatus::Sent(Utc::now(), prediction_time),
                 };
+                
+                // Use TOKIO_RUNTIME.spawn_blocking for the synchronous operation
                 TOKIO_RUNTIME.spawn_blocking(move || {
                     manage_send(model_clone, msg, receiver_clone);
                 });
