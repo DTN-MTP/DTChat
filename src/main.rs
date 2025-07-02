@@ -32,8 +32,7 @@ fn main() -> Result<(), eframe::Error> {
         Err(_) => {
             let default_path = "db/default.yaml".to_string();
             println!(
-                "No DTCHAT_CONFIG environment variable found. Using default configuration: {}",
-                default_path
+                "No DTCHAT_CONFIG environment variable found. Using default configuration: {default_path}"
             );
             default_path
         }
@@ -55,7 +54,7 @@ fn main() -> Result<(), eframe::Error> {
     let prediction_config = match PredictionConfig::new(&contact_plan) {
         Ok(config) => Some(config),
         Err(e) => {
-            eprintln!("Failed to create prediction_config: {}", e);
+            eprintln!("Failed to create prediction_config: {e}");
             None
         }
     };
@@ -144,7 +143,7 @@ fn main() -> Result<(), eframe::Error> {
             controller.lock().unwrap().add_observer(model_arc.clone());
         }
         Err(e) => {
-            eprintln!("Failed to initialize socket controller: {:?}", e);
+            eprintln!("Failed to initialize socket controller: {e:?}");
         }
     }
 

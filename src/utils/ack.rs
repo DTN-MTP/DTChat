@@ -18,9 +18,9 @@ pub enum AckError {
 impl std::fmt::Display for AckError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Network(err) => write!(f, "Network error during ACK: {}", err),
-            Self::Serialization(msg) => write!(f, "Serialization error during ACK: {}", msg),
-            Self::InvalidMessage(msg) => write!(f, "Invalid message format for ACK: {}", msg),
+            Self::Network(err) => write!(f, "Network error during ACK: {err}"),
+            Self::Serialization(msg) => write!(f, "Serialization error during ACK: {msg}"),
+            Self::InvalidMessage(msg) => write!(f, "Invalid message format for ACK: {msg}"),
         }
     }
 }
@@ -95,7 +95,7 @@ pub fn send_ack_message_non_blocking(
         )
         .await
         {
-            eprintln!("Failed to send ACK message: {}", e);
+            eprintln!("Failed to send ACK message: {e}");
         }
     });
 }

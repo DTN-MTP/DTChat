@@ -23,7 +23,7 @@ pub struct PredictionConfig {
 impl PredictionConfig {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
         println!("RAW contact plan : ");
-        println!("{}", contact_plan);
+        println!("{contact_plan}");
 
         let (nodes, contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
 
@@ -92,17 +92,14 @@ impl PredictionConfig {
         let source_node_id = self.get_node_id(source_ion).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Source ION ID '{}' not found in contact plan", source_ion),
+                format!("Source ION ID '{source_ion}' not found in contact plan"),
             )
         })?;
 
         let dest_node_id = self.get_node_id(dest_ion).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!(
-                    "Destination ION ID '{}' not found in contact plan",
-                    dest_ion
-                ),
+                format!("Destination ION ID '{dest_ion}' not found in contact plan"),
             )
         })?;
 
@@ -121,8 +118,7 @@ impl PredictionConfig {
         let mut router = self.router.lock().unwrap();
         match router.route(bundle.source, &bundle, cp_send_time, &excluded_nodes) {
             Some(routing_output) => {
-                println!("Route found from ION {} to ION {}!", source_ion, dest_ion);
-
+                println!("Route found from ION {source_ion} to ION {dest_ion}!");
                 // Only display the last element
                 if let Some((_contact_ptr, (_contact, route_stages))) =
                     routing_output.first_hops.iter().last()
@@ -138,28 +134,25 @@ impl PredictionConfig {
                             "the cp_start_time in UTC is : {:?}",
                             PredictionConfig::f64_to_utc(self.cp_start_time)
                         );
-                        println!("cp_start_time is {}", self.cp_start_time);
-                        println!("cp_send_time is {}", cp_send_time);
-                        println!("delay is {}", delay);
-                        println!("returned value is {}", delay + self.cp_start_time);
                         println!(
-                            "returned value in UTC is {:?}",
+                            "the delay in UTC is : {:?}",
                             PredictionConfig::f64_to_utc(delay + self.cp_start_time)
                         );
+                        println!("cp_send_time is {cp_send_time}");
+                        println!("the delay in seconds is : {delay}");
 
                         return Ok(delay + self.cp_start_time);
                     }
                 }
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(io::Error::other(
                     "Route found but no route stages available",
                 ))
             }
             None => {
-                println!("No route found from ION {} to ION {}", source_ion, dest_ion);
+                println!("No route found from ION {source_ion} to ION {dest_ion}");
                 Err(io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!("No route found from ION {} to ION {}", source_ion, dest_ion),
+                    format!("No route found from ION {source_ion} to ION {dest_ion}"),
                 ))
             }
         }

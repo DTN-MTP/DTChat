@@ -79,7 +79,7 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
         if parts.len() != 2 {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                format!("Invalid IPN EID format: {}", eid_string),
+                format!("Invalid IPN EID format: {eid_string}"),
             ));
         }
 
@@ -123,7 +123,7 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     } else {
         Err(Error::new(
             ErrorKind::InvalidInput,
-            format!("Unsupported scheme in EID: {}", eid_string),
+            format!("Unsupported scheme in EID: {eid_string}"),
         ))
     }
 }
@@ -225,11 +225,10 @@ impl GenericSocket {
                             match socket.read(&mut buffer) {
                                 Ok(size) => {
                                     println!(
-                                        "UDP/BP received {} bytes on listening address {}", size,
-                                        address
+                                        "UDP/BP received {size} bytes on listening address {address}"
                                     );
                                      for b in &buffer[0..size] {
-                                        print!("{} ", b);
+                                        print!("{b}");
                                      };
                                     let new_controller_arc = Arc::clone(&controller_arc);
                                     let address_clone = address.clone();
@@ -263,7 +262,7 @@ impl GenericSocket {
                                     thread::sleep(std::time::Duration::from_millis(10));
                                 }
                                 Err(e) => {
-                                    eprintln!("UDP Error: {}", e);
+                                    eprintln!("UDP Error: {e}");
                                     break;
                                 }
                             }
@@ -279,7 +278,7 @@ impl GenericSocket {
                     move || loop {
                         match socket.accept() {
                             Ok((stream, _peer)) => {
-                                println!("TCP received data on listening address {}", address);
+                                println!("TCP received data on listening address {address}");
                                 let new_controller_arc = Arc::clone(&controller_arc);
 
                                 TOKIO_RUNTIME.spawn(async move {
@@ -290,7 +289,7 @@ impl GenericSocket {
                                 thread::sleep(std::time::Duration::from_millis(10));
                             }
                             Err(e) => {
-                                eprintln!("TCP Error: {}", e);
+                                eprintln!("TCP Error: {e}");
                                 break;
                             }
                         }
@@ -347,7 +346,7 @@ async fn handle_tcp_connection(
             }
         }
         Err(e) => {
-            eprintln!("TCP Read Error: {}", e);
+            eprintln!("TCP Read Error: {e}");
         }
     }
 }
@@ -355,9 +354,9 @@ async fn handle_tcp_connection(
 impl std::fmt::Display for Endpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Endpoint::Udp(s) => write!(f, "{}", s),
-            Endpoint::Tcp(s) => write!(f, "{}", s),
-            Endpoint::Bp(s) => write!(f, "{}", s),
+            Endpoint::Udp(s) => write!(f, "{s}"),
+            Endpoint::Tcp(s) => write!(f, "{s}"),
+            Endpoint::Bp(s) => write!(f, "{s}"),
         }
     }
 }
@@ -452,7 +451,7 @@ impl DefaultSocketController {
                     &mut match GenericSocket::new(&target_endpoint) {
                         Ok(socket) => socket,
                         Err(e) => {
-                            eprintln!("Failed to create socket for ACK: {}", e);
+                            eprintln!("Failed to create socket for ACK: {e}");
                             return;
                         }
                     },
@@ -558,7 +557,7 @@ impl DefaultSocketController {
         is_read: bool,
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
-        println!("🔄 Processing ACK for message {}", message_uuid);
+        println!("🔄 Processing ACK for message {message_uuid}");
         // Notify observers about the ACK so they can update message status
         for observer in &self.observers {
             observer.on_ack_received(message_uuid, is_read, ack_time);
@@ -578,22 +577,19 @@ impl DefaultSocketController {
         for endpoint in &local_peer.endpoints {
             // Skip invalid or placeholder endpoints
             if !endpoint.is_valid() {
-                eprintln!("Skipping invalid or placeholder endpoint: {:?}", endpoint);
+                eprintln!("Skipping invalid or placeholder endpoint: {endpoint:?}");
                 continue;
             }
 
             match GenericSocket::new(endpoint) {
                 Ok(mut sock) => {
                     if let Err(e) = sock.start_listener(controller_arc.clone()) {
-                        eprintln!(
-                            "Failed to start listener for endpoint {:?}: {}",
-                            endpoint, e
-                        );
+                        eprintln!("Failed to start listener for endpoint {endpoint:?}: {e}");
                         // Continue with next endpoint instead of failing completely
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to create socket for endpoint {:?}: {}", endpoint, e);
+                    eprintln!("Failed to create socket for endpoint {endpoint:?}: {e}");
                     // Continue with next endpoint instead of failing
                 }
             }
@@ -619,7 +615,7 @@ impl SendingSocket for GenericSocket {
         self.send(&serialized)?;
         println!("serialized: {} bytes", serialized.len());
         for b in &serialized {
-            print!("{} ", b);
+            print!("{b}");
         }
         Ok(serialized.len())
     }
