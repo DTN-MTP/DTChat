@@ -1,5 +1,5 @@
 use crate::network::endpoint::{create_bp_sockaddr, Endpoint, NetworkError, NetworkResult};
-use crate::network::encoding::MessageCodec;
+use crate::network::encoding::MessageSerializerEngine;
 use crate::utils::{config::Peer, message::ChatMessage, proto::DeserializedMessage};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{
@@ -29,11 +29,9 @@ pub trait SocketObserver: Send + Sync {
 }
 
 /// Trait for controlling socket operations
-pub trait SocketController: Send + Sync {
+pub trait NetworkEventController: Send + Sync {
     fn add_observer(&mut self, observer: Arc<dyn SocketObserver>);
     fn get_peers(&self) -> Vec<Peer>;
-    fn get_local_peer(&self) -> Option<&Peer>;
-    fn get_observers(&self) -> Vec<Arc<dyn SocketObserver>>;
     fn notify_observers(&self, message: ChatMessage);
     fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>);
 }
@@ -132,7 +130,7 @@ impl GenericSocket {
 
     pub fn start_listener<C>(&mut self, controller: Arc<Mutex<C>>) -> NetworkResult<()> 
     where
-        C: SocketController + 'static,
+        C: NetworkEventController + 'static,
     {
         if self.listening {
             return Ok(());
@@ -155,7 +153,7 @@ impl GenericSocket {
 
     fn start_datagram_listener<C>(&mut self, address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
     where
-        C: SocketController + 'static,
+        C: NetworkEventController + 'static,
     {
         let mut socket = self.socket.try_clone()?;
         let endpoint = self.endpoint.clone();
@@ -191,7 +189,7 @@ impl GenericSocket {
 
     fn start_stream_listener<C>(&mut self, address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
     where
-        C: SocketController + 'static,
+        C: NetworkEventController + 'static,
     {
         self.socket.listen(128)?;
         let socket = self.socket.try_clone()?;
@@ -223,7 +221,7 @@ impl GenericSocket {
 
     async fn handle_tcp_connection<C>(mut stream: std::net::TcpStream, controller: Arc<Mutex<C>>)
     where
-        C: SocketController + 'static,
+        C: NetworkEventController + 'static,
     {
         let mut buffer = vec![0u8; 8192];
         match stream.read(&mut buffer) {
@@ -240,14 +238,14 @@ impl GenericSocket {
 
     async fn handle_received_data<C>(data: Vec<u8>, controller: Arc<Mutex<C>>, _endpoint: Endpoint)
     where
-        C: SocketController + 'static,
+        C: NetworkEventController + 'static,
     {
         let peers = {
             let ctrl = controller.lock().unwrap();
             ctrl.get_peers()
         };
 
-        let codec = MessageCodec::new();
+        let codec = MessageSerializerEngine::new();
         if let Ok(Some(deserialized)) = codec.decode(&data, &peers) {
             let ctrl = controller.lock().unwrap();
             match deserialized {
@@ -268,8 +266,8 @@ impl GenericSocket {
 
     /// Send a chat message
     pub fn send_message(&mut self, message: &ChatMessage) -> NetworkResult<usize> {
-        let codec = MessageCodec::new();
-        let serialized = codec.encode(message)?;
+        let codec = MessageSerializerEngine::new();
+        let serialized = codec.encode_validated(message)?;
         self.send(&serialized)
     }
 
@@ -287,14 +285,13 @@ impl Clone for GenericSocket {
     }
 }
 
-/// Default implementation of SocketController
-pub struct DefaultSocketController {
+pub struct NetworkEventManager {
     observers: Vec<Arc<dyn SocketObserver>>,
     local_peer: Option<Peer>,
     peers: Vec<Peer>,
 }
 
-impl DefaultSocketController {
+impl NetworkEventManager {
     pub fn new() -> Self {
         Self {
             observers: Vec::new(),
@@ -311,7 +308,6 @@ impl DefaultSocketController {
         self.peers = peers;
     }
 
-    /// Initialize and start listeners for all endpoints
     pub fn init_controller(
         local_peer: Peer,
         peers: Vec<Peer>,
@@ -344,21 +340,13 @@ impl DefaultSocketController {
     }
 }
 
-impl SocketController for DefaultSocketController {
+impl NetworkEventController for NetworkEventManager {
     fn add_observer(&mut self, observer: Arc<dyn SocketObserver>) {
         self.observers.push(observer);
     }
 
     fn get_peers(&self) -> Vec<Peer> {
         self.peers.clone()
-    }
-
-    fn get_local_peer(&self) -> Option<&Peer> {
-        self.local_peer.as_ref()
-    }
-
-    fn get_observers(&self) -> Vec<Arc<dyn SocketObserver>> {
-        self.observers.clone()
     }
 
     fn notify_observers(&self, message: ChatMessage) {

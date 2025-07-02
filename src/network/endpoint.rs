@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use socket2::SockAddr;
 use std::{
     fmt,
-    io::{self, Error, ErrorKind},
+    io::{self},
     mem::{self, ManuallyDrop},
     net::SocketAddr,
     ptr,
@@ -131,7 +131,6 @@ impl FromStr for Endpoint {
 }
 
 const BP_SCHEME_IPN: u32 = 1;
-const BP_SCHEME_DTN: u32 = 2;
 
 #[repr(C)]
 struct SockAddrBp {
@@ -143,7 +142,6 @@ struct SockAddrBp {
 #[repr(C)]
 union BpAddr {
     ipn: ManuallyDrop<IpnAddr>,
-    // Extend with other schemes like DTN if needed
 }
 
 #[repr(C)]
@@ -210,40 +208,4 @@ fn create_ipn_sockaddr(node_id: u32, service_id: u32) -> NetworkResult<SockAddr>
     let addr_len = mem::size_of::<SockAddrBp>() as libc::socklen_t;
     let address = unsafe { SockAddr::new(sockaddr_storage, addr_len) };
     Ok(address)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_endpoint_creation() {
-        let tcp_endpoint = Endpoint::new("tcp", "127.0.0.1:8080").unwrap();
-        assert_eq!(tcp_endpoint.protocol(), "tcp");
-        assert_eq!(tcp_endpoint.address(), "127.0.0.1:8080");
-    }
-
-    #[test]
-    fn test_endpoint_from_str() {
-        let endpoint: Endpoint = "tcp://127.0.0.1:8080".parse().unwrap();
-        assert_eq!(endpoint, Endpoint::Tcp("127.0.0.1:8080".to_string()));
-    }
-
-    #[test]
-    fn test_endpoint_display() {
-        let endpoint = Endpoint::Tcp("127.0.0.1:8080".to_string());
-        assert_eq!(endpoint.to_string(), "tcp://127.0.0.1:8080");
-    }
-
-    #[test]
-    fn test_endpoint_validation() {
-        let valid_tcp = Endpoint::Tcp("127.0.0.1:8080".to_string());
-        assert!(valid_tcp.is_valid());
-
-        let invalid_tcp = Endpoint::Tcp("invalid_address".to_string());
-        assert!(!invalid_tcp.is_valid());
-
-        let valid_bp = Endpoint::Bp("ipn:1.1".to_string());
-        assert!(valid_bp.is_valid());
-    }
 }

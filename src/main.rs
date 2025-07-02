@@ -15,7 +15,7 @@ use utils::{
     prediction_config::PredictionConfig,
 };
 
-use network::{NetworkEngine, SocketController};
+use network::{NetworkEngine};
 
 #[cfg(feature = "dev")]
 use utils::{

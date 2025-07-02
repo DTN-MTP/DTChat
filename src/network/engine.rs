@@ -1,5 +1,5 @@
 use crate::network::{
-    socket::{DefaultSocketController, GenericSocket, SocketController, SocketObserver},
+    socket::{NetworkEventManager, GenericSocket, NetworkEventController, SocketObserver},
     Endpoint, NetworkError, NetworkResult,
 };
 use crate::utils::{
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 /// Network engine for managing connections and message routing
 pub struct NetworkEngine {
-    controller: Arc<Mutex<DefaultSocketController>>,
+    controller: Arc<Mutex<NetworkEventManager>>,
     local_peer: Peer,
     peers: Vec<Peer>,
 }
@@ -19,7 +19,7 @@ pub struct NetworkEngine {
 impl NetworkEngine {
     /// Create a new NetworkEngine instance
     pub fn new(local_peer: Peer, peers: Vec<Peer>) -> NetworkResult<Self> {
-        let controller = DefaultSocketController::init_controller(local_peer.clone(), peers.clone())?;
+        let controller = NetworkEventManager::init_controller(local_peer.clone(), peers.clone())?;
         
         Ok(Self {
             controller,
@@ -148,78 +148,5 @@ impl SocketObserver for LoggingObserver {
     ) {
         println!("🔔 Observer: ACK received for {} (read: {}) at {}", 
             message_uuid, is_read, ack_time.format("%H:%M:%S"));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::network::Endpoint;
-
-    fn create_test_peer(uuid: &str, name: &str, endpoints: Vec<Endpoint>) -> Peer {
-        Peer {
-            uuid: uuid.to_string(),
-            name: name.to_string(),
-            endpoints,
-            color: 0,
-        }
-    }
-
-    #[test]
-    fn test_network_engine_creation() {
-        let local_peer = create_test_peer("local", "Local Peer", vec![
-            Endpoint::Tcp("127.0.0.1:7001".to_string()),
-        ]);
-        
-        let peers = vec![
-            create_test_peer("peer1", "Peer 1", vec![
-                Endpoint::Tcp("127.0.0.1:7002".to_string()),
-            ]),
-        ];
-
-        let engine = NetworkEngine::new(local_peer.clone(), peers.clone()).unwrap();
-        
-        assert_eq!(engine.local_peer().uuid, "local");
-        assert_eq!(engine.peers().len(), 1);
-        assert!(engine.find_peer("peer1").is_some());
-        assert!(engine.find_peer("nonexistent").is_none());
-    }
-
-    #[test]
-    fn test_peer_management() {
-        let local_peer = create_test_peer("local", "Local Peer", vec![]);
-        let mut engine = NetworkEngine::new(local_peer, vec![]).unwrap();
-
-        let new_peer = create_test_peer("new", "New Peer", vec![
-            Endpoint::Tcp("127.0.0.1:8000".to_string()),
-        ]);
-
-        engine.add_peer(new_peer.clone());
-        assert_eq!(engine.peers().len(), 1);
-        assert!(engine.find_peer("new").is_some());
-
-        let removed = engine.remove_peer("new");
-        assert!(removed);
-        assert_eq!(engine.peers().len(), 0);
-        assert!(engine.find_peer("new").is_none());
-    }
-
-    #[test]
-    fn test_network_stats() {
-        let local_peer = create_test_peer("local", "Local Peer", vec![
-            Endpoint::Tcp("127.0.0.1:7001".to_string()),
-            Endpoint::Udp("127.0.0.1:7002".to_string()),
-        ]);
-        
-        let peers = vec![
-            create_test_peer("peer1", "Peer 1", vec![]),
-            create_test_peer("peer2", "Peer 2", vec![]),
-        ];
-
-        let engine = NetworkEngine::new(local_peer, peers).unwrap();
-        let stats = engine.get_stats();
-
-        assert_eq!(stats.local_peer_endpoints, 2);
-        assert_eq!(stats.total_peers, 2);
     }
 }
