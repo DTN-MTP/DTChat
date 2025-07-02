@@ -5,12 +5,20 @@ mod layout;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
+
+#[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
 use utils::{
     config::AppConfigManager,
     prediction_config::PredictionConfig,
     socket::{DefaultSocketController, SocketController},
+};
+
+#[cfg(feature = "dev")]
+use utils::{
+    message::{ChatMessage, MessageStatus},
+    proto::generate_uuid,
 };
 
 #[derive(Clone)]
@@ -41,7 +49,8 @@ fn main() -> Result<(), eframe::Error> {
         eprintln!("Contact plan missing !!!");
     }
 
-    let _now = Utc::now() - Duration::seconds(40);
+    #[cfg(feature = "dev")]
+    let mut now = Utc::now() - Duration::seconds(40);
 
     let prediction_config = match PredictionConfig::new(&contact_plan) {
         Ok(config) => Some(config),
@@ -51,6 +60,15 @@ fn main() -> Result<(), eframe::Error> {
         }
     };
 
+    #[cfg(feature = "dev")]
+    let mut model = ChatModel::new(
+        shared_peers.clone(),
+        local_peer.clone(),
+        shared_rooms.clone(),
+        prediction_config,
+    );
+
+    #[cfg(not(feature = "dev"))]
     let model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),

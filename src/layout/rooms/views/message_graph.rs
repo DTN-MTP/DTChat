@@ -10,7 +10,7 @@ trait AutoReset {
     fn auto_reset(self, auto: bool) -> Self;
 }
 
-impl<'a> AutoReset for Plot<'a> {
+impl AutoReset for Plot<'_> {
     fn auto_reset(self, auto: bool) -> Self {
         if auto {
             return self.reset();
@@ -35,7 +35,7 @@ pub fn ts_to_str(
     if time {
         res += &datetime.format("%H:%M:%S").to_string()
     }
-    return res;
+    res
 }
 
 impl MessageGraphView {
@@ -52,21 +52,17 @@ impl MessageGraphView {
 
         for (index, message) in locked_model.messages.iter().enumerate() {
             let key = message.sender.uuid.clone();
-            if !per_sender.contains_key(&key) {
-                per_sender.insert(key, (message.sender.clone(), Vec::new()));
-            }
+            per_sender.entry(key).or_insert_with(|| (message.sender.clone(), Vec::new()));
 
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
                 let (tx, pbat_opt, rx_opt) = message.get_timestamps();
 
                 let upper_whisker = if let Some(received) = rx_opt {
                     received - 1.0
+                } else if let Some(pbat) = pbat_opt {
+                    pbat
                 } else {
-                    if let Some(pbat) = pbat_opt {
-                        pbat
-                    } else {
-                        tx - 1.0
-                    }
+                    tx - 1.0
                 };
 
                 box_elems.push(
@@ -82,7 +78,7 @@ impl MessageGraphView {
         let time_formatter = |x: GridMark, _range: &RangeInclusive<f64>| {
             // Convert timestamp to readable datetime
             let datetime = DateTime::<Utc>::from_timestamp_millis(x.value as i64).unwrap();
-            return ts_to_str(&datetime, true, true, Some("\n".to_string()));
+            ts_to_str(&datetime, true, true, Some("\n".to_string()))
         };
 
         let x_axes = vec![AxisHints::new_x()
@@ -107,7 +103,7 @@ impl MessageGraphView {
                     format!("{}: {:.*}%", name, 1, value.y)
                 } else {
                     let value = DateTime::<Utc>::from_timestamp_millis(value.x as i64).unwrap();
-                    format!("{}", ts_to_str(&value, false, true, None))
+                    ts_to_str(&value, false, true, None).to_string()
                 }
             })
             .auto_reset(reset_requested)

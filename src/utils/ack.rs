@@ -1,7 +1,7 @@
 use crate::utils::message::ChatMessage;
-use crate::utils::proto::proto::proto_message::Content;
-use crate::utils::proto::proto::DeliveryStatus;
-use crate::utils::proto::{generate_uuid, proto};
+use crate::utils::proto::dtchat_proto::proto_message::Content;
+use crate::utils::proto::dtchat_proto::DeliveryStatus;
+use crate::utils::proto::{generate_uuid, dtchat_proto};
 use crate::utils::socket::{self, GenericSocket};
 
 pub type AckResult<T> = Result<T, AckError>;
@@ -32,14 +32,14 @@ pub fn create_ack_message(
     received_msg: &ChatMessage,
     local_peer_uuid: &str,
     is_read: bool,
-) -> proto::ProtoMessage {
+) -> dtchat_proto::ProtoMessage {
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
         received: true,
         read: is_read,
     };
 
-    proto::ProtoMessage {
+    dtchat_proto::ProtoMessage {
         uuid: generate_uuid(),
         sender_uuid: local_peer_uuid.to_string(), // ACK is sent by the local peer
         timestamp: chrono::Utc::now().timestamp_millis(),

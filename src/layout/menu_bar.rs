@@ -2,15 +2,11 @@ use crate::app::ChatApp;
 use eframe::egui;
 
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub enum NavigationItems {
+    #[default]
     Rooms,
     Contacts,
-}
-
-impl Default for NavigationItems {
-    fn default() -> Self {
-        NavigationItems::Rooms
-    }
 }
 
 pub struct MenuBar {}

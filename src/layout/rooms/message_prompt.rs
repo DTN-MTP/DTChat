@@ -12,8 +12,7 @@ use egui::{vec2, CornerRadius, TextEdit};
 
 // Parse the whole adress to ion_id
 fn extract_ion_id_from_bp_address(bp_address: &str) -> String {
-    if bp_address.starts_with("ipn:") {
-        let after_ipn = &bp_address[4..];
+    if let Some(after_ipn) = bp_address.strip_prefix("ipn:") {
         if let Some(dot_pos) = after_ipn.find('.') {
             return after_ipn[..dot_pos].to_string();
         }
@@ -69,7 +68,7 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
                     model_clone
                         .lock()
                         .unwrap()
-                        .notify_observers(AppEvent::MessageError(format!("Socket error: {}", e)));
+                        .notify_observers(AppEvent::Error(format!("Socket error: {}", e)));
                 }
             });
         }
@@ -78,7 +77,7 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
             model
                 .lock()
                 .unwrap()
-                .notify_observers(AppEvent::MessageError(
+                .notify_observers(AppEvent::Error(
                     "Socket initialization failed.".to_string(),
                 ));
         }
@@ -96,9 +95,9 @@ impl MessagePrompt {
             .unwrap()
             .events
             .retain(|event| match event {
-                AppEvent::MessageError(msg)
-                | AppEvent::MessageSent(msg)
-                | AppEvent::MessageReceived(msg) => {
+                AppEvent::Error(msg)
+                | AppEvent::Sent(msg)
+                | AppEvent::Received(msg) => {
                     app.message_panel.send_status = Some(msg.clone());
                     false
                 }

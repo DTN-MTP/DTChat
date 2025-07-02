@@ -5,11 +5,11 @@ use uuid::Uuid;
 use super::config::Peer;
 use super::message::{ChatMessage, MessageStatus};
 
-pub mod proto {
+pub mod dtchat_proto {
     include!(concat!(env!("OUT_DIR"), "/dtchat.rs"));
 }
 
-pub use proto::proto_message::Content;
+pub use dtchat_proto::proto_message::Content;
 
 #[derive(Debug)]
 pub enum DeserializedMessage {
@@ -31,7 +31,7 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
     use prost::Message;
-    if let Ok(proto_msg) = proto::ProtoMessage::decode(buf) {
+    if let Ok(proto_msg) = dtchat_proto::ProtoMessage::decode(buf) {
         return extract_message_from_proto(proto_msg, peers);
     }
     None
@@ -49,18 +49,18 @@ pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
 
-fn construct_proto_message(message: &ChatMessage) -> proto::ProtoMessage {
+fn construct_proto_message(message: &ChatMessage) -> dtchat_proto::ProtoMessage {
     let (tx_time, _, _) = message.get_timestamps();
 
     let content = {
-        let text_message = proto::TextMessage {
+        let text_message = dtchat_proto::TextMessage {
             content: message.text.clone(),
             reply_to_uuid: message.response.clone(),
         };
         Some(Content::Text(text_message))
     };
 
-    proto::ProtoMessage {
+    dtchat_proto::ProtoMessage {
         uuid: message.uuid.clone(),
         sender_uuid: message.sender.uuid.clone(),
         timestamp: tx_time as i64,
@@ -70,7 +70,7 @@ fn construct_proto_message(message: &ChatMessage) -> proto::ProtoMessage {
 }
 
 fn extract_message_from_proto(
-    proto: proto::ProtoMessage,
+    proto: dtchat_proto::ProtoMessage,
     peers: &[Peer],
 ) -> Option<DeserializedMessage> {
     use chrono::TimeZone;

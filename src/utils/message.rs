@@ -29,7 +29,7 @@ impl ChatMessage {
 
                 format!(
                     "[{}->{}][{}]",
-                    tx.format("%H:%M:%S").to_string(),
+                    tx.format("%H:%M:%S"),
                     pred_str,
                     self.sender.name
                 )
@@ -38,8 +38,8 @@ impl ChatMessage {
                 let acked = if sent_by_me { "✓" } else { "" };
                 format!(
                     "[{}->{}{}][{}]",
-                    tx.format("%H:%M:%S").to_string(),
-                    rx.format("%H:%M:%S").to_string(),
+                    tx.format("%H:%M:%S"),
+                    rx.format("%H:%M:%S"),
                     acked,
                     self.sender.name
                 )

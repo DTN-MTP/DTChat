@@ -27,14 +27,6 @@ pub enum Endpoint {
 }
 
 impl Endpoint {
-    pub fn to_string(&self) -> String {
-        match self {
-            Endpoint::Udp(s) => s.clone(),
-            Endpoint::Tcp(s) => s.clone(),
-            Endpoint::Bp(s) => s.clone(),
-        }
-    }
-
     /// Check if this endpoint is valid and can be used for socket operations
     pub fn is_valid(&self) -> bool {
         match self {
@@ -184,12 +176,12 @@ impl GenericSocket {
         };
 
         let socket = Socket::new(domain, semtype, Some(proto))?;
-        return Ok(Self {
-            socket: socket,
+        Ok(Self {
+            socket,
             eidpoint: eid.clone(),
             sockaddr: address,
             listening: false,
-        });
+        })
     }
 
     pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -219,7 +211,7 @@ impl GenericSocket {
 
         self.socket.set_nonblocking(true)?;
         self.socket.set_reuse_address(true)?;
-        self.socket.bind(&SockAddr::from(self.sockaddr.clone()))?;
+        self.socket.bind(&self.sockaddr.clone())?;
 
         match &self.eidpoint {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
@@ -360,6 +352,16 @@ async fn handle_tcp_connection(
     }
 }
 
+impl std::fmt::Display for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Endpoint::Udp(s) => write!(f, "{}", s),
+            Endpoint::Tcp(s) => write!(f, "{}", s),
+            Endpoint::Bp(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 pub trait SocketObserver: Send + Sync {
     fn on_socket_event(&self, message: ChatMessage);
     fn on_ack_received(
@@ -439,7 +441,7 @@ impl DefaultSocketController {
                 println!(
                     "🎯 Sending ACK to {} via {}",
                     sender_peer.name,
-                    target_endpoint.to_string()
+                    target_endpoint
                 );
 
                 let msg_clone = message.clone();
@@ -620,7 +622,6 @@ impl SendingSocket for GenericSocket {
         for b in &serialized {
             print!("{} ", b);
         }
-        println!("");
         Ok(serialized.len())
     }
 }

@@ -64,14 +64,11 @@ impl PredictionConfig {
         match endpoint {
             Endpoint::Bp(bp_address) => {
                 // Handle ipn: format (e.g., "ipn:10.1" -> "10")
-                if bp_address.starts_with("ipn:") {
-                    let after_ipn = &bp_address[4..]; // Remove "ipn:" prefix
+                if let Some(after_ipn) = bp_address.strip_prefix("ipn:") {
                     if let Some(dot_pos) = after_ipn.find('.') {
                         return Some(after_ipn[..dot_pos].to_string());
-                    } else {
-                        // If no dot, return the whole number part
-                        return Some(after_ipn.to_string());
                     }
+                    
                 }
                 if bp_address.chars().all(|c| c.is_ascii_digit()) {
                     return Some(bp_address.clone());
