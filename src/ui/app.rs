@@ -1,14 +1,17 @@
 use super::{
-    menu_bar::NavigationItems,
-    rooms::{
+    menu::NavigationItems,
+    views::{
+        message_graph::MessageGraphView, 
+        message_list::MessageListView,
         message_settings_bar::{MessageSettingsBar, RoomView},
-        views::{message_graph::MessageGraphView, message_list::MessageListView},
+    },
+    components::{
+        message_forge::MessageForge,
+        message_input::MessagePrompt,
     },
 };
 use crate::app::ChatApp;
-use crate::layout::menu_bar::MenuBar;
-use crate::layout::rooms::message_forge::MessageForge;
-use crate::layout::rooms::message_prompt::MessagePrompt;
+use crate::ui::menu::MenuBar;
 use eframe::egui;
 use egui::{CentralPanel, TopBottomPanel};
 

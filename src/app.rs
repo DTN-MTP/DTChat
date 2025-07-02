@@ -1,9 +1,8 @@
-use crate::layout::menu_bar::NavigationItems;
-use crate::layout::rooms::message_settings_bar::RoomView;
-use crate::layout::ui::display;
-use crate::utils::config::{Peer, Room};
-use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::prediction_config::PredictionConfig;
+use crate::ui::menu::NavigationItems;
+use crate::ui::components::message_settings::RoomView;
+use crate::ui::app::display;
+use crate::domain::{Peer, Room, ChatMessage, MessageStatus};
+use crate::config::PredictionConfig;
 use crate::network::{SocketObserver, NetworkEngine};
 use chrono::{DateTime, Utc};
 use eframe::egui;

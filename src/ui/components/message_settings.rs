@@ -2,7 +2,7 @@ use crate::app::ChatApp;
 use eframe::egui;
 use egui::{Align, ComboBox, Layout};
 
-use super::actions::create_room::CreateRoomForm;
+use crate::ui::views::rooms::actions::create_room::CreateRoomForm;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoomView {

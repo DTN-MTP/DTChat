@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
-
-use super::config::Peer;
+use crate::domain::Peer;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageStatus {
@@ -46,6 +45,7 @@ impl ChatMessage {
             }
         }
     }
+    
     pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
             MessageStatus::Sent(tx, pbat_opt) => {

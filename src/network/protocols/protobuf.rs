@@ -1,9 +1,6 @@
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
-
-use super::config::Peer;
-use super::message::{ChatMessage, MessageStatus};
+use crate::domain::{Peer, ChatMessage, MessageStatus};
 
 pub mod dtchat_proto {
     include!(concat!(env!("OUT_DIR"), "/dtchat.rs"));
@@ -52,10 +49,6 @@ fn find_peer_by_id(peers: &[Peer], id: &str) -> Option<Peer> {
 
 fn default_peer() -> Peer {
     Peer::default()
-}
-
-pub fn generate_uuid() -> String {
-    Uuid::new_v4().to_string()
 }
 
 fn construct_proto_message(message: &ChatMessage) -> dtchat_proto::ProtoMessage {

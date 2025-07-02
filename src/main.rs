@@ -1,8 +1,11 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
 mod app;
-mod layout;
+mod config;
+mod domain;
 mod network;
+mod ui;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
@@ -10,19 +13,18 @@ use app::{ChatApp, ChatModel, EventHandler};
 #[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
-use utils::{
-    ack_config,
-    config::AppConfigManager,
-    prediction_config::PredictionConfig,
+use config::{
+    initialize_ack_config,
+    AppConfigManager,
+    PredictionConfig,
 };
 
 use network::{NetworkEngine};
 
 #[cfg(feature = "dev")]
-use utils::{
-    message::{ChatMessage, MessageStatus},
-    proto::generate_uuid,
-};
+use domain::{ChatMessage, MessageStatus};
+#[cfg(feature = "dev")]
+use utils::generate_uuid;
 
 #[derive(Clone)]
 pub struct ArcChatApp {
@@ -32,7 +34,7 @@ pub struct ArcChatApp {
 fn main() -> Result<(), eframe::Error> {
     // Initialize ACK configuration at startup
     println!("🚀 Initialisation de DTChat");
-    ack_config::initialize_ack_config();
+    initialize_ack_config();
     
     let config_path = match std::env::var("DTCHAT_CONFIG") {
         Ok(path) => path,

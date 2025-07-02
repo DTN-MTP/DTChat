@@ -17,29 +17,54 @@ DTChat is a modern, GUI-based chat application designed for Delay Tolerant Netwo
 ## Architecture
 
 ```
-DTChat/
-├── src/
-│   ├── app.rs                      # Main application logic
-│   ├── main.rs                     # Entry point
-│   ├── layout/                     # UI components
-│   │   ├── rooms/                  # Chat interface modules
-│   │   │   ├── message_list.rs     # Message display
-│   │   │   ├── message_prompt.rs   # Input handling
-│   │   │   ├── message_forge.rs    # Peer selection
-│   │   │   └── message_graph.rs    # Timeline visualization
-│   │   └── menu_bar.rs             # Navigation menu
-│   ├── utils/                      # Core utilities
-│   │   ├── prediction_config.rs    # Prediction implementation using A-SABR routing
-│   │   ├── proto.rs                # Message serialization
-│   │   ├── socket.rs               # Network communication
-│   │   ├── message.rs              # Message data structures
-│   │   ├── config.rs               # Configuration management
-│   │   └── ack.rs                  # Acknowledgment handling
-│   └── proto/                      # Protocol buffer definitions
-│       └── message.proto           # Message format specification
-├── A-SABR/                         # Routing algorithm submodule
-├── database.yaml                   # Peer and network configuration
-└── Cargo.toml                      # Dependencies and features
+src/
+├── main.rs                 # Point d'entrée
+├── app.rs                  # Logique application principale
+├── config/                 # Configuration
+│   ├── mod.rs
+│   ├── app_config.rs      # AppConfigManager 
+│   ├── ack_config.rs      # Configuration ACK
+│   └── prediction.rs      # PredictionConfig
+├── domain/                 # Types métier core
+│   ├── mod.rs
+│   ├── message.rs         # ChatMessage, MessageStatus
+│   ├── peer.rs            # Peer 
+│   └── room.rs            # Room 
+├── network/                # Couche réseau 
+│   ├── mod.rs
+│   ├── engine.rs          # NetworkEngine
+│   ├── endpoint.rs        # Endpoints
+│   ├── encoding.rs        # Sérialisation
+│   ├── socket.rs          # Sockets
+│   └── protocols/         # Protocoles réseau
+│       ├── proto/
+│       │   ├── message.proto
+│       ├── mod.rs
+│       ├── protobuf.rs    # Proto logic
+│       └── ack.rs         # ACK logic 
+├── ui/                     # Interface utilisateur 
+│   ├── mod.rs
+│   ├── app.rs             # Interface principale
+│   ├── menu.rs            # Menu bar
+│   ├── components/        # Composants UI
+│   │   ├── mod.rs
+│   │   ├── message_input.rs   # MessagePrompt
+│   │   ├── message_forge.rs   # MessageForge  
+│   │   └── message_settings.rs # MessageSettingsBar
+│   └── views/             # Vues
+│       ├── mod.rs
+│       ├── message_list.rs    # Liste des messages
+│       ├── message_graph.rs   # Graphique timeline
+│       └── rooms/
+│           ├── mod.rs
+│           └── actions/
+│               ├── mod.rs
+│               └── create_room.rs
+└── utils/                  # Utilitaires génériques
+    ├── mod.rs
+    ├── colors.rs          # Couleurs (conservé)
+    ├── uuid.rs            # UUID utils (extrait de proto.rs)
+    └── time.rs            # Utilitaires temps (nouveau)
 ```
 
 ## Quick Start
@@ -51,23 +76,28 @@ DTChat/
 - **Git**: For submodule support
 - [Protobuf](https://protobuf.dev/installation/)
 
-### Installation
+### Running DTChat TCP local instances
+
+1. Clone the repository:
 
 ```bash
 # Clone the repository with submodules
 git clone --recursive https://github.com/DTN-MTP/DTChat.git
 cd DTChat
+```
+2. Open two terminal windows in the DTChat directory.
 
-# in the node VM Build the project
-cargo build --release
-
-# Run DTChat with default configuration
-DTCHAT_CONFIG=./db/default.yaml  cargo run 
+3. Start `instance 1` & `instance 2` of DTChat with TCP configuration:
+```bash
+# Start the first instance of DTChat with TCP configuration
+DTCHAT_CONFIG=db/local/tcp-<1 or 2>.yaml cargo run #  replace <1 or 2> with 1 or 2
 ```
 
 ### Configuration (DTCHAT_CONFIG)
 
 Three different configuration files are available in the `db` directory:
+- `local/tcp-1.yaml`: Configuration for the first local instance (TCP)
+- `local/tcp-2.yaml`: Configuration for the second local instance (TCP)
 - `default.yaml`: Default configuration for local testing
 - `ion.yaml`: Example configuration for ion integration (dtchat-bp-socket-testing)
 - `ud3dtn.yaml`: Example configuration for ud3dtn integration(dtchat-bp-socket-testing)
@@ -90,7 +120,7 @@ a outduct tcp 192.168.50.30:4556 tcpclo
 
 ### Basic Chat
 
-1. **Start DTChat**: `DTCHAT_CONFIG=./db/default.yaml cargo run`
+1. **Start DTChat**: `DTCHAT_CONFIG=db/**/<DB>.yaml cargo run`
 2. **Select a peer** from the dropdown menu
 3. **Click on the PBAT checkbox (optional)** to view delivery time prediction
 4. **Type your message** in the input field

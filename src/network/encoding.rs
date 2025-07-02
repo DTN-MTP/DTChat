@@ -1,5 +1,6 @@
 use crate::network::{NetworkError, NetworkResult};
-use crate::utils::{config::Peer, message::ChatMessage, proto::{serialize_message, deserialize_message, DeserializedMessage}};
+use crate::domain::{Peer, ChatMessage};
+use crate::network::protocols::{serialize_message, deserialize_message, DeserializedMessage};
 use bytes::Bytes;
 
 pub trait MessageSerializer {

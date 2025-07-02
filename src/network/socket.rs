@@ -1,6 +1,7 @@
 use crate::network::endpoint::{create_bp_sockaddr, Endpoint, NetworkError, NetworkResult};
 use crate::network::encoding::MessageSerializerEngine;
-use crate::utils::{config::Peer, message::ChatMessage, proto::DeserializedMessage};
+use crate::domain::{Peer, ChatMessage};
+use crate::network::protocols::DeserializedMessage;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{
     io::{self, Read, Write},
@@ -363,7 +364,7 @@ impl NetworkEventManager {
                     use std::thread;
                     use std::time::Duration;
                     
-                    let delay_ms = crate::utils::ack_config::get_random_ack_delay_ms();
+                    let delay_ms = crate::config::get_random_ack_delay_ms();
                     println!("🎲 Random ACK delay: {}ms", delay_ms);
                     if delay_ms > 0 {
                         println!("⏱️  ACK delay: waiting {}ms before sending ACK", delay_ms);
@@ -373,7 +374,7 @@ impl NetworkEventManager {
                     // Create socket and send ACK
                     match crate::network::socket::GenericSocket::new(target_endpoint_clone) {
                         Ok(mut socket) => {
-                            crate::utils::ack::send_ack_message_non_blocking(
+                            crate::network::protocols::ack::send_ack_message_non_blocking(
                                 &msg_clone,
                                 &mut socket,
                                 &local_peer_uuid,

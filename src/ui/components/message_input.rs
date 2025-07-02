@@ -2,9 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection};
 use crate::utils::colors::COLORS;
-use crate::utils::config::Peer;
-use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::proto::generate_uuid;
+use crate::domain::{Peer, ChatMessage, MessageStatus};
+use crate::utils::generate_uuid;
 use crate::network::Endpoint;
 use crate::network::socket::TOKIO_RUNTIME;
 use chrono::{DateTime, Utc};

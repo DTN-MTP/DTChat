@@ -1,8 +1,9 @@
-use crate::utils::message::ChatMessage;
-use crate::utils::proto::dtchat_proto::proto_message::Content;
-use crate::utils::proto::dtchat_proto::DeliveryStatus;
-use crate::utils::proto::{dtchat_proto, generate_uuid};
+use crate::domain::ChatMessage;
+use crate::network::protocols::protobuf::dtchat_proto::proto_message::Content;
+use crate::network::protocols::protobuf::dtchat_proto::DeliveryStatus;
+use crate::network::protocols::protobuf::{dtchat_proto};
 use crate::network::socket::{GenericSocket, TOKIO_RUNTIME};
+use crate::utils::generate_uuid;
 
 pub type AckResult<T> = Result<T, AckError>;
 

@@ -66,9 +66,9 @@ impl MessageListView {
                         
                         // Add visual indicator for ACK status
                         let ack_indicator = match &message.shipment_status {
-                            crate::utils::message::MessageStatus::Sent(_, _) if sent_by_me => "⏳", // Waiting for ACK
-                            crate::utils::message::MessageStatus::Received(_, _) if sent_by_me => "✅", // ACK received
-                            crate::utils::message::MessageStatus::Received(_, _) => "📨", // Received message
+                            crate::domain::MessageStatus::Sent(_, _) if sent_by_me => "⏳", // Waiting for ACK
+                            crate::domain::MessageStatus::Received(_, _) if sent_by_me => "✅", // ACK received
+                            crate::domain::MessageStatus::Received(_, _) => "📨", // Received message
                             _ => "📤", // Sent by others
                         };
                         

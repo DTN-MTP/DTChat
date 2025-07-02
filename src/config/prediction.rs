@@ -7,12 +7,12 @@ use a_sabr::{
     routing::Router,
     types::{Date, NodeID},
 };
-use chrono::{DateTime, Utc};
+use chrono::{Utc};
 use std::collections::HashMap;
 use std::io;
 use std::sync::{Mutex, RwLock};
 
-use crate::network::Endpoint;
+use crate::{network::Endpoint, utils::f64_to_utc};
 
 pub struct PredictionConfig {
     ion_to_node_id: RwLock<HashMap<String, NodeID>>,
@@ -53,12 +53,6 @@ impl PredictionConfig {
         self.ion_to_node_id.read().unwrap().get(ion_id).copied()
     }
 
-    pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
-        let secs = timestamp.trunc() as i64;
-        let nsecs = ((timestamp.fract()) * 1_000_000_000.0).round() as u32;
-        let naive = DateTime::from_timestamp(secs, nsecs).expect("Invalid timestamp");
-        DateTime::from_naive_utc_and_offset(naive.naive_utc(), Utc)
-    }
 
     pub fn extract_ion_node_from_endpoint(endpoint: &Endpoint) -> Option<String> {
         match endpoint {
@@ -132,11 +126,11 @@ impl PredictionConfig {
                         println!("#########################################################");
                         println!(
                             "the cp_start_time in UTC is : {:?}",
-                            PredictionConfig::f64_to_utc(self.cp_start_time)
+                            f64_to_utc(self.cp_start_time)
                         );
                         println!(
                             "the delay in UTC is : {:?}",
-                            PredictionConfig::f64_to_utc(delay + self.cp_start_time)
+                            f64_to_utc(delay + self.cp_start_time)
                         );
                         println!("cp_send_time is {cp_send_time}");
                         println!("the delay in seconds is : {delay}");

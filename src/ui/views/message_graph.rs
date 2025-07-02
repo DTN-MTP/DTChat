@@ -4,6 +4,7 @@ use crate::app::ChatApp;
 use chrono::{DateTime, Local, Utc};
 use egui::{Color32, Vec2b};
 use egui_plot::{AxisHints, BoxElem, BoxPlot, BoxSpread, GridMark, Legend, Plot, VLine};
+
 pub struct MessageGraphView {}
 
 trait AutoReset {

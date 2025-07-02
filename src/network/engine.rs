@@ -2,11 +2,8 @@ use crate::network::{
     socket::{NetworkEventManager, GenericSocket, NetworkEventController, SocketObserver},
     Endpoint, NetworkError, NetworkResult,
 };
-use crate::utils::{
-    ack,
-    config::Peer,
-    message::ChatMessage,
-};
+use crate::network::protocols::ack;
+use crate::domain::{Peer, ChatMessage};
 use std::sync::{Arc, Mutex};
 
 /// Network engine for managing connections and message routing
