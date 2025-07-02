@@ -5,6 +5,8 @@ mod layout;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
+
+#[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
 use utils::{
@@ -13,7 +15,11 @@ use utils::{
     socket::{DefaultSocketController, SocketController},
 };
 
-
+#[cfg(feature = "dev")]
+use utils::{
+    message::{ChatMessage, MessageStatus},
+    proto::generate_uuid,
+};
 
 #[derive(Clone)]
 pub struct ArcChatApp {
@@ -25,7 +31,9 @@ fn main() -> Result<(), eframe::Error> {
         Ok(path) => path,
         Err(_) => {
             let default_path = "db/default.yaml".to_string();
-            println!("No DTCHAT_CONFIG environment variable found. Using default configuration: {}", default_path);
+            println!(
+                "No DTCHAT_CONFIG environment variable found. Using default configuration: {default_path}"
+            );
             default_path
         }
     };
@@ -40,16 +48,26 @@ fn main() -> Result<(), eframe::Error> {
         eprintln!("Contact plan missing !!!");
     }
 
-    let _now = Utc::now() - Duration::seconds(40);
+    #[cfg(feature = "dev")]
+    let mut now = Utc::now() - Duration::seconds(40);
 
     let prediction_config = match PredictionConfig::new(&contact_plan) {
         Ok(config) => Some(config),
         Err(e) => {
-            eprintln!("Failed to create prediction_config: {}", e);
+            eprintln!("Failed to create prediction_config: {e}");
             None
         }
     };
 
+    #[cfg(feature = "dev")]
+    let mut model = ChatModel::new(
+        shared_peers.clone(),
+        local_peer.clone(),
+        shared_rooms.clone(),
+        prediction_config,
+    );
+
+    #[cfg(not(feature = "dev"))]
     let model = ChatModel::new(
         shared_peers.clone(),
         local_peer.clone(),
@@ -125,7 +143,7 @@ fn main() -> Result<(), eframe::Error> {
             controller.lock().unwrap().add_observer(model_arc.clone());
         }
         Err(e) => {
-            eprintln!("Failed to initialize socket controller: {:?}", e);
+            eprintln!("Failed to initialize socket controller: {e:?}");
         }
     }
 

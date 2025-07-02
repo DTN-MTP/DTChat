@@ -4,12 +4,12 @@ pub struct MessageListView {}
 
 fn get_str_for_strat(local_peer_uuid: &String, strat: &SortStrategy) -> String {
     match strat {
-        SortStrategy::Standard => return "Standard".to_string(),
+        SortStrategy::Standard => "Standard".to_string(),
         SortStrategy::Relative(peer) => {
             if peer.uuid == *local_peer_uuid {
-                return "Local".to_string();
+                "Local".to_string()
             } else {
-                return format!("Relative ({})", peer.name).to_string();
+                format!("Relative ({})", peer.name)
             }
         }
     }

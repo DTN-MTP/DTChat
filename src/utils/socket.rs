@@ -8,9 +8,9 @@ use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::{self, Error, ErrorKind, Read, Write};
 use std::mem::ManuallyDrop;
-use std::{ptr, mem};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::{mem, ptr};
 use tokio::runtime::Runtime;
 
 const AF_BP: c_int = 28;
@@ -27,14 +27,6 @@ pub enum Endpoint {
 }
 
 impl Endpoint {
-    pub fn to_string(&self) -> String {
-        match self {
-            Endpoint::Udp(s) => s.clone(),
-            Endpoint::Tcp(s) => s.clone(),
-            Endpoint::Bp(s) => s.clone(),
-        }
-    }
-
     /// Check if this endpoint is valid and can be used for socket operations
     pub fn is_valid(&self) -> bool {
         match self {
@@ -53,7 +45,6 @@ impl Endpoint {
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
-
     const BP_SCHEME_IPN: u32 = 1;
 
     #[repr(C)]
@@ -76,35 +67,45 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     }
 
     if eid_string.is_empty() {
-        return Err(Error::new(ErrorKind::InvalidInput, "EID string cannot be empty"));
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "EID string cannot be empty",
+        ));
     }
 
     // ---- Handle "ipn:" scheme ----
     if let Some(eid_body) = eid_string.strip_prefix("ipn:") {
         let parts: Vec<&str> = eid_body.split('.').collect();
         if parts.len() != 2 {
-            return Err(Error::new(ErrorKind::InvalidInput, format!("Invalid IPN EID format: {}", eid_string)));
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("Invalid IPN EID format: {eid_string}"),
+            ));
         }
 
-        let node_id: u32 = parts[0].parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node ID"))?;
-        let service_id: u32 = parts[1].parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service ID"))?;
+        let node_id: u32 = parts[0]
+            .parse()
+            .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node ID"))?;
+        let service_id: u32 = parts[1]
+            .parse()
+            .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service ID"))?;
 
         let sockaddr_bp = SockAddrBp {
             bp_family: AF_BP as libc::sa_family_t,
             bp_scheme: BP_SCHEME_IPN,
             bp_addr: BpAddr {
                 ipn: ManuallyDrop::new(IpnAddr {
-                        node_id,
-                        service_id,
-                    }),
+                    node_id,
+                    service_id,
+                }),
             },
         };
 
         let mut sockaddr_storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
         unsafe {
             ptr::copy_nonoverlapping(
-                &sockaddr_bp as *const SockAddrBp as *const u8,
-                &mut sockaddr_storage as *mut _ as *mut u8,
+                &sockaddr_bp as *const SockAddrBp as *const std::ffi::c_void,
+                &mut sockaddr_storage as *mut _ as *mut std::ffi::c_void,
                 mem::size_of::<SockAddrBp>(),
             );
         }
@@ -115,9 +116,15 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     }
     // ---- Handle unsupported or unimplemented schemes ----
     else if eid_string.starts_with("dtn:") {
-        Err(Error::new(ErrorKind::Unsupported, "DTN scheme not yet implemented"))
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "DTN scheme not yet implemented",
+        ))
     } else {
-        Err(Error::new(ErrorKind::InvalidInput, format!("Unsupported scheme in EID: {}", eid_string)))
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("Unsupported scheme in EID: {eid_string}"),
+        ))
     }
 }
 
@@ -169,12 +176,12 @@ impl GenericSocket {
         };
 
         let socket = Socket::new(domain, semtype, Some(proto))?;
-        return Ok(Self {
-            socket: socket,
+        Ok(Self {
+            socket,
             eidpoint: eid.clone(),
             sockaddr: address,
             listening: false,
-        });
+        })
     }
 
     pub fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -204,7 +211,7 @@ impl GenericSocket {
 
         self.socket.set_nonblocking(true)?;
         self.socket.set_reuse_address(true)?;
-        self.socket.bind(&SockAddr::from(self.sockaddr.clone()))?;
+        self.socket.bind(&self.sockaddr.clone())?;
 
         match &self.eidpoint {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
@@ -218,13 +225,11 @@ impl GenericSocket {
                             match socket.read(&mut buffer) {
                                 Ok(size) => {
                                     println!(
-                                        "UDP/BP received {} bytes on listening address {}", size,
-                                        address
+                                        "UDP/BP received {size} bytes on listening address {address}"
                                     );
                                      for b in &buffer[0..size] {
-                                        print!("{} ", b);
-                                     }println!("");
-                                     
+                                        print!("{b}");
+                                     };
                                     let new_controller_arc = Arc::clone(&controller_arc);
                                     let address_clone = address.clone();
                                     TOKIO_RUNTIME.spawn(async move {
@@ -257,7 +262,7 @@ impl GenericSocket {
                                     thread::sleep(std::time::Duration::from_millis(10));
                                 }
                                 Err(e) => {
-                                    eprintln!("UDP Error: {}", e);
+                                    eprintln!("UDP Error: {e}");
                                     break;
                                 }
                             }
@@ -273,7 +278,7 @@ impl GenericSocket {
                     move || loop {
                         match socket.accept() {
                             Ok((stream, _peer)) => {
-                                println!("TCP received data on listening address {}", address);
+                                println!("TCP received data on listening address {address}");
                                 let new_controller_arc = Arc::clone(&controller_arc);
 
                                 TOKIO_RUNTIME.spawn(async move {
@@ -284,7 +289,7 @@ impl GenericSocket {
                                 thread::sleep(std::time::Duration::from_millis(10));
                             }
                             Err(e) => {
-                                eprintln!("TCP Error: {}", e);
+                                eprintln!("TCP Error: {e}");
                                 break;
                             }
                         }
@@ -311,7 +316,9 @@ async fn handle_tcp_connection(
             let peer_addr = stream.peer_addr().ok();
             let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
 
-            if let Some(deserialized) = deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers){
+            if let Some(deserialized) =
+                deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers)
+            {
                 match deserialized {
                     DeserializedMessage::ChatMessage(message) => {
                         println!(
@@ -339,7 +346,17 @@ async fn handle_tcp_connection(
             }
         }
         Err(e) => {
-            eprintln!("TCP Read Error: {}", e);
+            eprintln!("TCP Read Error: {e}");
+        }
+    }
+}
+
+impl std::fmt::Display for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Endpoint::Udp(s) => write!(f, "{s}"),
+            Endpoint::Tcp(s) => write!(f, "{s}"),
+            Endpoint::Bp(s) => write!(f, "{s}"),
         }
     }
 }
@@ -422,8 +439,7 @@ impl DefaultSocketController {
                 let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
                 println!(
                     "🎯 Sending ACK to {} via {}",
-                    sender_peer.name,
-                    target_endpoint.to_string()
+                    sender_peer.name, target_endpoint
                 );
 
                 let msg_clone = message.clone();
@@ -435,7 +451,7 @@ impl DefaultSocketController {
                     &mut match GenericSocket::new(&target_endpoint) {
                         Ok(socket) => socket,
                         Err(e) => {
-                            eprintln!("Failed to create socket for ACK: {}", e);
+                            eprintln!("Failed to create socket for ACK: {e}");
                             return;
                         }
                     },
@@ -541,7 +557,7 @@ impl DefaultSocketController {
         is_read: bool,
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
-        println!("🔄 Processing ACK for message {}", message_uuid);
+        println!("🔄 Processing ACK for message {message_uuid}");
         // Notify observers about the ACK so they can update message status
         for observer in &self.observers {
             observer.on_ack_received(message_uuid, is_read, ack_time);
@@ -561,22 +577,19 @@ impl DefaultSocketController {
         for endpoint in &local_peer.endpoints {
             // Skip invalid or placeholder endpoints
             if !endpoint.is_valid() {
-                eprintln!("Skipping invalid or placeholder endpoint: {:?}", endpoint);
+                eprintln!("Skipping invalid or placeholder endpoint: {endpoint:?}");
                 continue;
             }
 
             match GenericSocket::new(endpoint) {
                 Ok(mut sock) => {
                     if let Err(e) = sock.start_listener(controller_arc.clone()) {
-                        eprintln!(
-                            "Failed to start listener for endpoint {:?}: {}",
-                            endpoint, e
-                        );
+                        eprintln!("Failed to start listener for endpoint {endpoint:?}: {e}");
                         // Continue with next endpoint instead of failing completely
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to create socket for endpoint {:?}: {}", endpoint, e);
+                    eprintln!("Failed to create socket for endpoint {endpoint:?}: {e}");
                     // Continue with next endpoint instead of failing
                 }
             }
@@ -602,8 +615,8 @@ impl SendingSocket for GenericSocket {
         self.send(&serialized)?;
         println!("serialized: {} bytes", serialized.len());
         for b in &serialized {
-            print!("{} ", b);
-        }println!("");
+            print!("{b}");
+        }
         Ok(serialized.len())
     }
 }

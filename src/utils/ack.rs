@@ -1,11 +1,8 @@
-
-
 use crate::utils::message::ChatMessage;
-use crate::utils::proto::proto::proto_message::Content;
-use crate::utils::proto::proto::DeliveryStatus;
-use crate::utils::proto::{proto, generate_uuid};
+use crate::utils::proto::dtchat_proto::proto_message::Content;
+use crate::utils::proto::dtchat_proto::DeliveryStatus;
+use crate::utils::proto::{dtchat_proto, generate_uuid};
 use crate::utils::socket::{self, GenericSocket};
-
 
 pub type AckResult<T> = Result<T, AckError>;
 
@@ -21,9 +18,9 @@ pub enum AckError {
 impl std::fmt::Display for AckError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Network(err) => write!(f, "Network error during ACK: {}", err),
-            Self::Serialization(msg) => write!(f, "Serialization error during ACK: {}", msg),
-            Self::InvalidMessage(msg) => write!(f, "Invalid message format for ACK: {}", msg),
+            Self::Network(err) => write!(f, "Network error during ACK: {err}"),
+            Self::Serialization(msg) => write!(f, "Serialization error during ACK: {msg}"),
+            Self::InvalidMessage(msg) => write!(f, "Invalid message format for ACK: {msg}"),
         }
     }
 }
@@ -35,14 +32,14 @@ pub fn create_ack_message(
     received_msg: &ChatMessage,
     local_peer_uuid: &str,
     is_read: bool,
-) -> proto::ProtoMessage {
+) -> dtchat_proto::ProtoMessage {
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
         received: true,
         read: is_read,
     };
 
-    proto::ProtoMessage {
+    dtchat_proto::ProtoMessage {
         uuid: generate_uuid(),
         sender_uuid: local_peer_uuid.to_string(), // ACK is sent by the local peer
         timestamp: chrono::Utc::now().timestamp_millis(),
@@ -98,7 +95,7 @@ pub fn send_ack_message_non_blocking(
         )
         .await
         {
-            eprintln!("Failed to send ACK message: {}", e);
+            eprintln!("Failed to send ACK message: {e}");
         }
     });
 }

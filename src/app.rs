@@ -13,9 +13,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub enum AppEvent {
-    MessageError(String),
-    MessageSent(String),
-    MessageReceived(String),
+    Error(String),
+    Sent(String),
+    Received(String),
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -55,7 +55,7 @@ fn relative_cmp(a: &ChatMessage, b: &ChatMessage, ctx_peer_uuid: &str) -> Orderi
     } else {
         tx_b
     };
-    return anchor_a.cmp(anchor_b);
+    anchor_a.cmp(anchor_b)
 }
 
 pub struct ChatModel {
@@ -109,15 +109,15 @@ impl ChatModel {
                 .unwrap_or_else(|i| i),
             SortStrategy::Relative(peer) => self
                 .messages
-                .binary_search_by(|msg| relative_cmp(msg, &new_msg, &peer.uuid.as_str()))
+                .binary_search_by(|msg| relative_cmp(msg, &new_msg, peer.uuid.as_str()))
                 .unwrap_or_else(|i| i),
         };
         self.messages.insert(idx, new_msg.clone());
 
         let event = match direction {
-            MessageDirection::Sent => AppEvent::MessageSent("Message sent.".to_string()),
+            MessageDirection::Sent => AppEvent::Sent("Message sent.".to_string()),
             MessageDirection::Received => {
-                AppEvent::MessageReceived(format!("New message from {}", new_msg.sender.name))
+                AppEvent::Received(format!("New message from {}", new_msg.sender.name))
             }
         };
         self.notify_observers(event);
@@ -127,7 +127,7 @@ impl ChatModel {
         self.sort_strategy = strat;
 
         match &self.sort_strategy {
-            SortStrategy::Standard => self.messages.sort_by(|a, b| standard_cmp(a, b)),
+            SortStrategy::Standard => self.messages.sort_by(standard_cmp),
             SortStrategy::Relative(for_peer) => self
                 .messages
                 .sort_by(|a, b| relative_cmp(a, b, for_peer.uuid.as_str())),
@@ -165,14 +165,11 @@ impl SocketObserver for Mutex<ChatModel> {
     ) {
         let mut model = self.lock().unwrap();
         if model.update_message_with_ack(message_uuid, is_read, ack_time) {
-            println!(
-                "Updated message {} with ACK (read: {})",
-                message_uuid, is_read
-            );
+            println!("Updated message {message_uuid} with ACK (read: {is_read})");
             // Trigger UI update
-            model.notify_observers(AppEvent::MessageSent("Message status updated".to_string()));
+            model.notify_observers(AppEvent::Sent("Message status updated".to_string()));
         } else {
-            println!("ACK received for unknown message: {}", message_uuid);
+            println!("ACK received for unknown message: {message_uuid}");
         }
     }
 }
@@ -196,9 +193,9 @@ pub struct ChatApp {
 impl ChatApp {
     pub fn new(model_arc: Arc<Mutex<ChatModel>>, handler_arc: Arc<Mutex<EventHandler>>) -> Self {
         let forging_receiver = model_arc.lock().unwrap().peers[0].clone();
-        let app = Self {
-            model_arc: model_arc,
-            handler_arc: handler_arc,
+        Self {
+            model_arc,
+            handler_arc,
             context_menu: NavigationItems::default(),
             message_panel: MessagePanel {
                 message_view: RoomView::default(),
@@ -208,8 +205,7 @@ impl ChatApp {
                 send_status: None,
                 pbat_enabled: false,
             },
-        };
-        return app;
+        }
     }
 }
 
@@ -221,10 +217,10 @@ pub struct EventHandler {
 
 impl EventHandler {
     pub fn new(ctx: egui::Context) -> Self {
-        return Self {
+        Self {
             events: VecDeque::new(),
-            ctx: ctx,
-        };
+            ctx,
+        }
     }
 }
 
@@ -234,9 +230,8 @@ pub trait ModelObserver: Send + Sync {
 
 impl ModelObserver for EventHandler {
     fn on_event(&mut self, event: AppEvent) {
-        match &event {
-            AppEvent::MessageReceived(_message) => self.ctx.request_repaint(),
-            _ => (),
+        if let AppEvent::Received(_message) = &event {
+            self.ctx.request_repaint()
         }
 
         self.events.push_back(event);

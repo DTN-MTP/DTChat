@@ -1,0 +1,11 @@
+name: Push & PR to the main branch
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rust_build_lint_fmt:
+    name: Rust Build, Lint & Format
+    uses: ./.github/workflows/ci.yaml
