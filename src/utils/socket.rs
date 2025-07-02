@@ -104,8 +104,8 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
         let mut sockaddr_storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
         unsafe {
             ptr::copy_nonoverlapping(
-                &sockaddr_bp as *const SockAddrBp as *const u8,
-                &mut sockaddr_storage as *mut _ as *mut u8,
+                &sockaddr_bp as *const SockAddrBp as *const std::ffi::c_void,
+                &mut sockaddr_storage as *mut _ as *mut std::ffi::c_void,
                 mem::size_of::<SockAddrBp>(),
             );
         }

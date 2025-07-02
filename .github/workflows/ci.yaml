@@ -1,9 +1,9 @@
 name: Rust CI
 
 on:
-  push:
-    branches: [ 3-add-a-ci-pipeline-to-test-the-rust-build ]
-
+  pull_request:
+    branches: [ main ]
+    
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -28,6 +28,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        
+    - name: Check formatting
+      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
+      run: cargo fmt --all -- --check
         
     - name: Install system dependencies
       run: |
@@ -64,17 +68,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.rust }}-target-
 
-    - name: Check formatting
-      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-      run: cargo fmt --all -- --check
-
     - name: Run clippy
       if: matrix.rust == 'stable'
       run: cargo clippy --all-targets --all-features -- -D warnings
-
-    - name: Build
-      run: cargo build --verbose --all-features
-      continue-on-error: ${{ matrix.experimental || false }}
 
   latest_deps:
     name: Test Latest Dependencies
