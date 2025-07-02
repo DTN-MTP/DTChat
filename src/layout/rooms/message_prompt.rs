@@ -31,7 +31,6 @@ pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
 pub struct MessagePrompt {}
 
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
-    println!("the receivers endpoint is : {:?}", receiver.endpoints[0]);
 
     // Get the NetworkEngine from the model
     let network_engine = {
@@ -59,20 +58,6 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
 
     // Spawn blocking task for network operations
     TOKIO_RUNTIME.spawn_blocking(move || {
-        #[cfg(feature = "delayed_ack")]
-        {
-            use std::env;
-            use std::thread;
-            use std::time::Duration;
-            // We delay the send to have a delayed ack, the message is still displayed instantly
-            let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(500); // Default to 500ms
-            println!("delayed_ack : waiting {delay_ms} ms before send");
-            thread::sleep(Duration::from_millis(delay_ms));
-        }
-
         // Use NetworkEngine to send the message
         let engine = network_engine.lock().unwrap();
         if let Err(e) = engine.send_message_to_peer(&msg_clone, &receiver_uuid) {

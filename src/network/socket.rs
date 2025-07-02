@@ -187,7 +187,7 @@ impl GenericSocket {
         Ok(())
     }
 
-    fn start_stream_listener<C>(&mut self, address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
+    fn start_stream_listener<C>(&mut self, _address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
     where
         C: NetworkEventController + 'static,
     {
@@ -197,8 +197,7 @@ impl GenericSocket {
         TOKIO_RUNTIME.spawn_blocking(move || {
             loop {
                 match socket.accept() {
-                    Ok((stream, peer_addr)) => {
-                        println!("TCP connection from {:?} on {}", peer_addr, address);
+                    Ok((stream, _)) => {
                         
                         let controller_clone = Arc::clone(&controller);
                         TOKIO_RUNTIME.spawn(async move {
@@ -226,7 +225,6 @@ impl GenericSocket {
         let mut buffer = vec![0u8; 8192];
         match stream.read(&mut buffer) {
             Ok(size) => {
-                println!("TCP received {} bytes", size);
                 Self::handle_received_data(buffer[0..size].to_vec(), controller, 
                     Endpoint::Tcp("unknown".to_string())).await;
             }
@@ -360,19 +358,15 @@ impl NetworkEventManager {
                 let local_peer_uuid = local_peer.uuid.clone();
                 let target_endpoint_clone = target_endpoint;
 
-                // Spawn ACK task with optional delay
+                // Spawn ACK task with configurable delay
                 crate::network::socket::TOKIO_RUNTIME.spawn_blocking(move || {
-                    #[cfg(feature = "delayed_ack")]
-                    {
-                        use std::env;
-                        use std::thread;
-                        use std::time::Duration;
-                        
-                        let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
-                            .ok()
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(100); // Default to 100ms for ACKs
-                        println!("⏱️  delayed_ack: waiting {}ms before sending ACK", delay_ms);
+                    use std::thread;
+                    use std::time::Duration;
+                    
+                    let delay_ms = crate::utils::ack_config::get_random_ack_delay_ms();
+                    println!("🎲 Random ACK delay: {}ms", delay_ms);
+                    if delay_ms > 0 {
+                        println!("⏱️  ACK delay: waiting {}ms before sending ACK", delay_ms);
                         thread::sleep(Duration::from_millis(delay_ms));
                     }
 

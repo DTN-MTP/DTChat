@@ -19,11 +19,11 @@ libc = "0.2.174"
 a_sabr = { git ="https://github.com/DTN-MTP/A-SABR.git", branch = "main", features = ["contact_work_area", "contact_suppression"] }
 chrono = "0.4.41"
 serde_yaml = "0.9.33"
+rand = "0.9.1"
 
 [features]
 bp = []
 dev = []
-delayed_ack = []
 
 [build-dependencies]
 prost-build = "0.14.1"

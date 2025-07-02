@@ -11,6 +11,7 @@ use app::{ChatApp, ChatModel, EventHandler};
 use chrono::{Duration, Utc};
 
 use utils::{
+    ack_config,
     config::AppConfigManager,
     prediction_config::PredictionConfig,
 };
@@ -29,6 +30,10 @@ pub struct ArcChatApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
+    // Initialize ACK configuration at startup
+    println!("🚀 Initialisation de DTChat");
+    ack_config::initialize_ack_config();
+    
     let config_path = match std::env::var("DTCHAT_CONFIG") {
         Ok(path) => path,
         Err(_) => {
