@@ -53,6 +53,8 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
 
                 #[cfg(feature = "delayed_ack")]
                 {
+                    use std::env;
+                    use tokio::time::{sleep, Duration};
                     // We delay the send to have a delayed ack, the message is still displayed instantly
                     let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
                         .ok()
