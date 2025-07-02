@@ -52,7 +52,9 @@ impl MessageGraphView {
 
         for (index, message) in locked_model.messages.iter().enumerate() {
             let key = message.sender.uuid.clone();
-            per_sender.entry(key).or_insert_with(|| (message.sender.clone(), Vec::new()));
+            per_sender
+                .entry(key)
+                .or_insert_with(|| (message.sender.clone(), Vec::new()));
 
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
                 let (tx, pbat_opt, rx_opt) = message.get_timestamps();

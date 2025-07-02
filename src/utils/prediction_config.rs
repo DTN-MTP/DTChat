@@ -68,7 +68,6 @@ impl PredictionConfig {
                     if let Some(dot_pos) = after_ipn.find('.') {
                         return Some(after_ipn[..dot_pos].to_string());
                     }
-                    
                 }
                 if bp_address.chars().all(|c| c.is_ascii_digit()) {
                     return Some(bp_address.clone());

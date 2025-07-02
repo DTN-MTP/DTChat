@@ -1,7 +1,7 @@
 use crate::utils::message::ChatMessage;
 use crate::utils::proto::dtchat_proto::proto_message::Content;
 use crate::utils::proto::dtchat_proto::DeliveryStatus;
-use crate::utils::proto::{generate_uuid, dtchat_proto};
+use crate::utils::proto::{dtchat_proto, generate_uuid};
 use crate::utils::socket::{self, GenericSocket};
 
 pub type AckResult<T> = Result<T, AckError>;

@@ -440,8 +440,7 @@ impl DefaultSocketController {
                 let target_endpoint = self.choose_ack_endpoint(sender_peer, received_on_endpoint);
                 println!(
                     "🎯 Sending ACK to {} via {}",
-                    sender_peer.name,
-                    target_endpoint
+                    sender_peer.name, target_endpoint
                 );
 
                 let msg_clone = message.clone();

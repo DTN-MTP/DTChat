@@ -77,9 +77,7 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
             model
                 .lock()
                 .unwrap()
-                .notify_observers(AppEvent::Error(
-                    "Socket initialization failed.".to_string(),
-                ));
+                .notify_observers(AppEvent::Error("Socket initialization failed.".to_string()));
         }
     }
 }
@@ -95,9 +93,7 @@ impl MessagePrompt {
             .unwrap()
             .events
             .retain(|event| match event {
-                AppEvent::Error(msg)
-                | AppEvent::Sent(msg)
-                | AppEvent::Received(msg) => {
+                AppEvent::Error(msg) | AppEvent::Sent(msg) | AppEvent::Received(msg) => {
                     app.message_panel.send_status = Some(msg.clone());
                     false
                 }

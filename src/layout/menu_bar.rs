@@ -1,8 +1,7 @@
 use crate::app::ChatApp;
 use eframe::egui;
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum NavigationItems {
     #[default]
     Rooms,

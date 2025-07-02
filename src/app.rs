@@ -207,7 +207,7 @@ impl ChatApp {
                 forging_receiver,
                 send_status: None,
                 pbat_enabled: false,
-            }
+            },
         }
     }
 }
