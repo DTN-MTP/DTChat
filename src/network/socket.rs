@@ -338,6 +338,99 @@ impl NetworkEventManager {
 
         Ok(controller_arc)
     }
+
+    fn send_ack_if_needed(&self, message: &ChatMessage) {
+        // Don't send ACK for ACK messages to avoid loops
+        if message.text.starts_with("[ACK]") {
+            return;
+        }
+
+        println!("📤 Auto-sending ACK for message: '{}'", message.text);
+        println!("🔍 Looking for sender with UUID: {}", message.sender.uuid);
+
+        if let Some(local_peer) = &self.local_peer {
+            if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
+                println!("✅ Found sender peer: {} (UUID: {})", sender_peer.name, sender_peer.uuid);
+                
+                // Choose the best endpoint for ACK (prefer BP > TCP > UDP)
+                let target_endpoint = self.choose_ack_endpoint(sender_peer);
+                println!("🎯 Sending ACK to {} via {}", sender_peer.name, target_endpoint);
+
+                let msg_clone = message.clone();
+                let local_peer_uuid = local_peer.uuid.clone();
+                let target_endpoint_clone = target_endpoint;
+
+                // Spawn ACK task with optional delay
+                crate::network::socket::TOKIO_RUNTIME.spawn_blocking(move || {
+                    #[cfg(feature = "delayed_ack")]
+                    {
+                        use std::env;
+                        use std::thread;
+                        use std::time::Duration;
+                        
+                        let delay_ms = env::var("DTCHAT_ACK_DELAY_MS")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(100); // Default to 100ms for ACKs
+                        println!("⏱️  delayed_ack: waiting {}ms before sending ACK", delay_ms);
+                        thread::sleep(Duration::from_millis(delay_ms));
+                    }
+
+                    // Create socket and send ACK
+                    match crate::network::socket::GenericSocket::new(target_endpoint_clone) {
+                        Ok(mut socket) => {
+                            crate::utils::ack::send_ack_message_non_blocking(
+                                &msg_clone,
+                                &mut socket,
+                                &local_peer_uuid,
+                                false, // Not read yet, just received
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Failed to create socket for ACK: {}", e);
+                        }
+                    }
+                });
+            } else {
+                println!("❌ Sender peer {} not found in peer list", message.sender.uuid);
+            }
+        } else {
+            println!("❌ No local peer configured for ACK sending");
+        }
+    }
+
+    fn choose_ack_endpoint(&self, sender_peer: &Peer) -> Endpoint {
+        // Prioritize BP > TCP > UDP for ACK reliability
+        for endpoint in &sender_peer.endpoints {
+            if let Endpoint::Bp(_) = endpoint {
+                if endpoint.is_valid() {
+                    return endpoint.clone();
+                }
+            }
+        }
+        for endpoint in &sender_peer.endpoints {
+            if let Endpoint::Tcp(_) = endpoint {
+                if endpoint.is_valid() {
+                    return endpoint.clone();
+                }
+            }
+        }
+        for endpoint in &sender_peer.endpoints {
+            if let Endpoint::Udp(_) = endpoint {
+                if endpoint.is_valid() {
+                    return endpoint.clone();
+                }
+            }
+        }
+        
+        // Ultimate fallback: first valid endpoint
+        sender_peer
+            .endpoints
+            .iter()
+            .find(|ep| ep.is_valid())
+            .unwrap_or(&sender_peer.endpoints[0])
+            .clone()
+    }
 }
 
 impl NetworkEventController for NetworkEventManager {
@@ -350,12 +443,16 @@ impl NetworkEventController for NetworkEventManager {
     }
 
     fn notify_observers(&self, message: ChatMessage) {
+        // Send automatic ACK before notifying observers
+        self.send_ack_if_needed(&message);
+        
         for observer in &self.observers {
             observer.on_message_received(message.clone());
         }
     }
 
     fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
+        println!("🔔 Broadcasting ACK notification for message {} to {} observers", message_uuid, self.observers.len());
         for observer in &self.observers {
             observer.on_ack_received(message_uuid, is_read, ack_time);
         }

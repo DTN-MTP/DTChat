@@ -58,6 +58,7 @@ impl MessageGraphView {
 
             if let Some((_sender, box_elems)) = per_sender.get_mut(&message.sender.uuid) {
                 let (tx, pbat_opt, rx_opt) = message.get_timestamps();
+                let is_local_message = message.sender.uuid == locked_model.localpeer.uuid;
 
                 let upper_whisker = if let Some(received) = rx_opt {
                     received - 1.0
@@ -67,12 +68,23 @@ impl MessageGraphView {
                     tx - 1.0
                 };
 
+                // Create different box representations based on ACK status
+                let box_name = if is_local_message {
+                    if rx_opt.is_some() {
+                        format!("✅ {}", message.text) // ACK received
+                    } else {
+                        format!("⏳ {}", message.text) // Waiting for ACK
+                    }
+                } else {
+                    format!("📨 {}", message.text) // Received message
+                };
+
                 box_elems.push(
                     BoxElem::new(
                         index as f64,
                         BoxSpread::new(tx + 1.0, tx, tx, rx_opt.unwrap_or(tx), upper_whisker),
                     )
-                    .name(message.text.clone()),
+                    .name(box_name),
                 );
             };
         }
@@ -134,10 +146,25 @@ impl MessageGraphView {
                                 DateTime::<Utc>::from_timestamp_millis(bar.spread.quartile3 as i64)
                                     .unwrap();
                             let date = tx_time.date_naive() != rx_time.date_naive();
+                            
+                            // Determine ACK status from message name
+                            let ack_status = if bar.name.starts_with("✅") {
+                                "ACK received"
+                            } else if bar.name.starts_with("⏳") {
+                                "Waiting for ACK"
+                            } else if bar.name.starts_with("📨") {
+                                "Message received"
+                            } else {
+                                "Unknown status"
+                            };
+                            
+                            let clean_name = bar.name.chars().skip(2).collect::<String>(); // Remove emoji prefix
+                            
                             format!(
-                                "Message: {}\nSent by {}\ntx time: {}\nrx_time: {}",
-                                bar.name,
+                                "Message: {}\nSent by: {}\nStatus: {}\nTX time: {}\nRX time: {}",
+                                clean_name,
                                 formatter_peer_name,
+                                ack_status,
                                 ts_to_str(&tx_time, date, true, None),
                                 ts_to_str(&rx_time, date, true, None),
                             )

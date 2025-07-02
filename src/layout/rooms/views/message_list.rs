@@ -63,6 +63,17 @@ impl MessageListView {
                     ui.horizontal(|ui| {
                         let color = message.sender.get_color();
                         let sent_by_me = local_peer.uuid == message.sender.uuid;
+                        
+                        // Add visual indicator for ACK status
+                        let ack_indicator = match &message.shipment_status {
+                            crate::utils::message::MessageStatus::Sent(_, _) if sent_by_me => "⏳", // Waiting for ACK
+                            crate::utils::message::MessageStatus::Received(_, _) if sent_by_me => "✅", // ACK received
+                            crate::utils::message::MessageStatus::Received(_, _) => "📨", // Received message
+                            _ => "📤", // Sent by others
+                        };
+                        
+                        ui.label(egui::RichText::new(ack_indicator).size(16.0));
+                        
                         ui.label(
                             egui::RichText::new(format!(
                                 "{}: {}",

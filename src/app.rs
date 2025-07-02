@@ -174,12 +174,14 @@ impl SocketObserver for Mutex<ChatModel> {
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
         let mut model = self.lock().unwrap();
+        println!("🎯 Model processing ACK for message {} (read: {})", message_uuid, is_read);
+        
         if model.update_message_with_ack(message_uuid, is_read, ack_time) {
-            println!("Updated message {message_uuid} with ACK (read: {is_read})");
+            println!("✅ Model updated message {} with ACK - triggering UI refresh", message_uuid);
             // Trigger UI update
             model.notify_observers(AppEvent::Sent("Message status updated".to_string()));
         } else {
-            println!("ACK received for unknown message: {message_uuid}");
+            println!("⚠️  Model: ACK received for unknown message: {}", message_uuid);
         }
     }
 }

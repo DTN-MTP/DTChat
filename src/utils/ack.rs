@@ -33,14 +33,20 @@ pub fn create_ack_message(
     local_peer_uuid: &str,
     is_read: bool,
 ) -> dtchat_proto::ProtoMessage {
+    println!("🔧 Creating ACK message for message {} (read: {})", received_msg.uuid, is_read);
+    
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
         received: true,
         read: is_read,
     };
 
+    let ack_uuid = generate_uuid();
+    println!("📋 ACK details - UUID: {}, Target: {}, Read status: {}", 
+             ack_uuid, received_msg.uuid, is_read);
+
     dtchat_proto::ProtoMessage {
-        uuid: generate_uuid(),
+        uuid: ack_uuid,
         sender_uuid: local_peer_uuid.to_string(), // ACK is sent by the local peer
         timestamp: chrono::Utc::now().timestamp_millis(),
         room_uuid: "default".to_string(), // Using default room
@@ -56,23 +62,29 @@ pub async fn send_ack_message(
 ) -> AckResult<()> {
     use prost::Message;
 
+    println!("📤 Starting ACK transmission for message {}", received_msg.uuid);
     let ack_proto_msg = create_ack_message(received_msg, local_peer_uuid, is_read);
 
     let mut buf = bytes::BytesMut::with_capacity(ack_proto_msg.encoded_len());
 
     if let Err(e) = prost::Message::encode(&ack_proto_msg, &mut buf) {
+        println!("❌ ACK encoding failed for message {}: {}", received_msg.uuid, e);
         return Err(AckError::Serialization(e.to_string()));
     }
 
+    let buf_len = buf.len();
     match socket.send(&buf.freeze()) {
         Ok(_) => {
             println!(
-                "Sent protobuf ACK for message {} (read: {})",
-                received_msg.uuid, is_read
+                "✅ ACK sent successfully for message {} (read: {}, size: {} bytes)",
+                received_msg.uuid, is_read, buf_len
             );
             Ok(())
         }
-        Err(e) => Err(AckError::Network(Box::new(e))),
+        Err(e) => {
+            println!("❌ ACK transmission failed for message {}: {}", received_msg.uuid, e);
+            Err(AckError::Network(Box::new(e)))
+        }
     }
 }
 
@@ -82,6 +94,8 @@ pub fn send_ack_message_non_blocking(
     local_peer_uuid: &str,
     is_read: bool,
 ) {
+    println!("🚀 Spawning async ACK task for message {}", received_msg.uuid);
+    
     let msg_clone = received_msg.clone();
     let mut socket_clone = socket.clone();
     let local_peer_uuid_clone = local_peer_uuid.to_string();
@@ -95,7 +109,9 @@ pub fn send_ack_message_non_blocking(
         )
         .await
         {
-            eprintln!("Failed to send ACK message: {e}");
+            eprintln!("❌ ACK task failed for message {}: {}", msg_clone.uuid, e);
+        } else {
+            println!("🎯 ACK task completed for message {}", msg_clone.uuid);
         }
     });
 }
