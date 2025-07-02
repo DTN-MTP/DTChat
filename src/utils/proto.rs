@@ -30,7 +30,6 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 }
 
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
-
     use prost::Message;
     if let Ok(proto_msg) = proto::ProtoMessage::decode(buf) {
         return extract_message_from_proto(proto_msg, peers);
@@ -49,7 +48,6 @@ fn default_peer() -> Peer {
 pub fn generate_uuid() -> String {
     Uuid::new_v4().to_string()
 }
-
 
 fn construct_proto_message(message: &ChatMessage) -> proto::ProtoMessage {
     let (tx_time, _, _) = message.get_timestamps();
@@ -70,7 +68,6 @@ fn construct_proto_message(message: &ChatMessage) -> proto::ProtoMessage {
         content,
     }
 }
-
 
 fn extract_message_from_proto(
     proto: proto::ProtoMessage,

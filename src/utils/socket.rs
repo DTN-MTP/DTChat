@@ -8,9 +8,9 @@ use serde::Deserialize;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::io::{self, Error, ErrorKind, Read, Write};
 use std::mem::ManuallyDrop;
-use std::{ptr, mem};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::{mem, ptr};
 use tokio::runtime::Runtime;
 
 const AF_BP: c_int = 28;
@@ -53,7 +53,6 @@ impl Endpoint {
 }
 
 fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
-
     const BP_SCHEME_IPN: u32 = 1;
 
     #[repr(C)]
@@ -76,27 +75,37 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     }
 
     if eid_string.is_empty() {
-        return Err(Error::new(ErrorKind::InvalidInput, "EID string cannot be empty"));
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "EID string cannot be empty",
+        ));
     }
 
     // ---- Handle "ipn:" scheme ----
     if let Some(eid_body) = eid_string.strip_prefix("ipn:") {
         let parts: Vec<&str> = eid_body.split('.').collect();
         if parts.len() != 2 {
-            return Err(Error::new(ErrorKind::InvalidInput, format!("Invalid IPN EID format: {}", eid_string)));
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("Invalid IPN EID format: {}", eid_string),
+            ));
         }
 
-        let node_id: u32 = parts[0].parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node ID"))?;
-        let service_id: u32 = parts[1].parse().map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service ID"))?;
+        let node_id: u32 = parts[0]
+            .parse()
+            .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid node ID"))?;
+        let service_id: u32 = parts[1]
+            .parse()
+            .map_err(|_| Error::new(ErrorKind::InvalidInput, "Invalid service ID"))?;
 
         let sockaddr_bp = SockAddrBp {
             bp_family: AF_BP as libc::sa_family_t,
             bp_scheme: BP_SCHEME_IPN,
             bp_addr: BpAddr {
                 ipn: ManuallyDrop::new(IpnAddr {
-                        node_id,
-                        service_id,
-                    }),
+                    node_id,
+                    service_id,
+                }),
             },
         };
 
@@ -115,9 +124,15 @@ fn create_bp_sockaddr_with_string(eid_string: &str) -> io::Result<SockAddr> {
     }
     // ---- Handle unsupported or unimplemented schemes ----
     else if eid_string.starts_with("dtn:") {
-        Err(Error::new(ErrorKind::Unsupported, "DTN scheme not yet implemented"))
+        Err(Error::new(
+            ErrorKind::Unsupported,
+            "DTN scheme not yet implemented",
+        ))
     } else {
-        Err(Error::new(ErrorKind::InvalidInput, format!("Unsupported scheme in EID: {}", eid_string)))
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("Unsupported scheme in EID: {}", eid_string),
+        ))
     }
 }
 
@@ -223,8 +238,7 @@ impl GenericSocket {
                                     );
                                      for b in &buffer[0..size] {
                                         print!("{} ", b);
-                                     }println!("");
-                                     
+                                     };
                                     let new_controller_arc = Arc::clone(&controller_arc);
                                     let address_clone = address.clone();
                                     TOKIO_RUNTIME.spawn(async move {
@@ -311,7 +325,9 @@ async fn handle_tcp_connection(
             let peer_addr = stream.peer_addr().ok();
             let tcp_endpoint = peer_addr.map(|addr| Endpoint::Tcp(addr.to_string()));
 
-            if let Some(deserialized) = deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers){
+            if let Some(deserialized) =
+                deserialize_message(&buffer[1..((buffer[0] as usize) + 1)], &peers)
+            {
                 match deserialized {
                     DeserializedMessage::ChatMessage(message) => {
                         println!(
@@ -603,7 +619,8 @@ impl SendingSocket for GenericSocket {
         println!("serialized: {} bytes", serialized.len());
         for b in &serialized {
             print!("{} ", b);
-        }println!("");
+        }
+        println!("");
         Ok(serialized.len())
     }
 }
