@@ -1,6 +1,6 @@
 pub mod colors;
-pub mod uuid;
 pub mod time;
+pub mod uuid;
 
-pub use uuid::*;
 pub use time::*;
+pub use uuid::*;

@@ -1,9 +1,9 @@
+use crate::domain::{ChatMessage, Peer};
+use crate::network::protocols::ack;
 use crate::network::{
-    socket::{NetworkEventManager, GenericSocket, NetworkEventController, SocketObserver},
+    socket::{GenericSocket, NetworkEventController, NetworkEventManager, SocketObserver},
     Endpoint, NetworkError, NetworkResult,
 };
-use crate::network::protocols::ack;
-use crate::domain::{Peer, ChatMessage};
 use std::sync::{Arc, Mutex};
 
 pub struct NetworkEngine {
@@ -15,7 +15,7 @@ pub struct NetworkEngine {
 impl NetworkEngine {
     pub fn new(local_peer: Peer, peers: Vec<Peer>) -> NetworkResult<Self> {
         let controller = NetworkEventManager::init_controller(local_peer.clone(), peers.clone())?;
-        
+
         Ok(Self {
             controller,
             local_peer,
@@ -28,10 +28,16 @@ impl NetworkEngine {
         controller.add_observer(observer);
     }
 
-    pub fn send_message_to_peer(&self, message: &ChatMessage, peer_uuid: &str) -> NetworkResult<()> {
-        let target_peer = self.peers.iter()
+    pub fn send_message_to_peer(
+        &self,
+        message: &ChatMessage,
+        peer_uuid: &str,
+    ) -> NetworkResult<()> {
+        let target_peer = self
+            .peers
+            .iter()
             .find(|p| p.uuid == peer_uuid)
-            .ok_or_else(|| NetworkError::InvalidFormat(format!("Peer not found: {}", peer_uuid)))?;
+            .ok_or_else(|| NetworkError::InvalidFormat(format!("Peer not found: {peer_uuid}")))?;
 
         for endpoint in &target_peer.endpoints {
             if endpoint.is_valid() {
@@ -41,23 +47,33 @@ impl NetworkEngine {
                         return Ok(());
                     }
                     Err(e) => {
-                        eprintln!("Failed to send via {}: {}", endpoint, e);
+                        eprintln!("Failed to send via {endpoint}: {e}");
                         continue;
                     }
                 }
             }
         }
 
-        Err(NetworkError::InvalidFormat(format!("No valid endpoints for peer: {}", peer_uuid)))
+        Err(NetworkError::InvalidFormat(format!(
+            "No valid endpoints for peer: {peer_uuid}"
+        )))
     }
 
-    pub fn send_message_to_endpoint(&self, message: &ChatMessage, endpoint: &Endpoint) -> NetworkResult<()> {
+    pub fn send_message_to_endpoint(
+        &self,
+        message: &ChatMessage,
+        endpoint: &Endpoint,
+    ) -> NetworkResult<()> {
         let mut socket = GenericSocket::new(endpoint.clone())?;
         socket.send_message(message)?;
         Ok(())
     }
 
-    pub fn send_ack(&self, original_message: &ChatMessage, target_endpoint: &Endpoint) -> NetworkResult<()> {
+    pub fn send_ack(
+        &self,
+        original_message: &ChatMessage,
+        target_endpoint: &Endpoint,
+    ) -> NetworkResult<()> {
         let mut socket = GenericSocket::new(target_endpoint.clone())?;
         ack::send_ack_message_non_blocking(
             original_message,
@@ -118,7 +134,10 @@ pub struct LoggingObserver;
 
 impl SocketObserver for LoggingObserver {
     fn on_message_received(&self, message: ChatMessage) {
-        println!("🔔 Observer: Message received from {}: {}", message.sender.name, message.text);
+        println!(
+            "🔔 Observer: Message received from {}: {}",
+            message.sender.name, message.text
+        );
     }
 
     fn on_ack_received(
@@ -127,7 +146,11 @@ impl SocketObserver for LoggingObserver {
         is_read: bool,
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
-        println!("🔔 Observer: ACK received for {} (read: {}) at {}", 
-            message_uuid, is_read, ack_time.format("%H:%M:%S"));
+        println!(
+            "🔔 Observer: ACK received for {} (read: {}) at {}",
+            message_uuid,
+            is_read,
+            ack_time.format("%H:%M:%S")
+        );
     }
 }

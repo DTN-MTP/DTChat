@@ -147,7 +147,7 @@ impl MessageGraphView {
                                 DateTime::<Utc>::from_timestamp_millis(bar.spread.quartile3 as i64)
                                     .unwrap();
                             let date = tx_time.date_naive() != rx_time.date_naive();
-                            
+
                             // Determine ACK status from message name
                             let ack_status = if bar.name.starts_with("✅") {
                                 "ACK received"
@@ -158,9 +158,9 @@ impl MessageGraphView {
                             } else {
                                 "Unknown status"
                             };
-                            
+
                             let clean_name = bar.name.chars().skip(2).collect::<String>(); // Remove emoji prefix
-                            
+
                             format!(
                                 "Message: {}\nSent by: {}\nStatus: {}\nTX time: {}\nRX time: {}",
                                 clean_name,

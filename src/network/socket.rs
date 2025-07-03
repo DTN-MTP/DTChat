@@ -1,7 +1,8 @@
-use crate::network::endpoint::{create_bp_sockaddr, Endpoint, NetworkError, NetworkResult};
+use crate::domain::{ChatMessage, Peer};
 use crate::network::encoding::MessageSerializerEngine;
-use crate::domain::{Peer, ChatMessage};
+use crate::network::endpoint::{create_bp_sockaddr, Endpoint, NetworkError, NetworkResult};
 use crate::network::protocols::DeserializedMessage;
+use once_cell::sync::Lazy;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::{
     io::{self, Read, Write},
@@ -11,7 +12,6 @@ use std::{
     time::Duration,
 };
 use tokio::runtime::Runtime;
-use once_cell::sync::Lazy;
 
 const AF_BP: libc::c_int = 28;
 
@@ -32,7 +32,12 @@ pub trait NetworkEventController: Send + Sync {
     fn add_observer(&mut self, observer: Arc<dyn SocketObserver>);
     fn get_peers(&self) -> Vec<Peer>;
     fn notify_observers(&self, message: ChatMessage);
-    fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>);
+    fn handle_ack_received(
+        &self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: chrono::DateTime<chrono::Utc>,
+    );
 }
 
 #[allow(dead_code)]
@@ -71,8 +76,10 @@ impl GenericSocket {
     pub fn with_config(endpoint: Endpoint, config: SocketConfig) -> NetworkResult<Self> {
         let (domain, socket_type, protocol, address) = match &endpoint {
             Endpoint::Udp(addr) => {
-                let socket_addr: SocketAddr = addr.parse()
-                    .map_err(|e: std::net::AddrParseError| NetworkError::AddressParseError(e.to_string()))?;
+                let socket_addr: SocketAddr =
+                    addr.parse().map_err(|e: std::net::AddrParseError| {
+                        NetworkError::AddressParseError(e.to_string())
+                    })?;
                 (
                     Domain::for_address(socket_addr),
                     Type::DGRAM,
@@ -81,8 +88,10 @@ impl GenericSocket {
                 )
             }
             Endpoint::Tcp(addr) => {
-                let socket_addr: SocketAddr = addr.parse()
-                    .map_err(|e: std::net::AddrParseError| NetworkError::AddressParseError(e.to_string()))?;
+                let socket_addr: SocketAddr =
+                    addr.parse().map_err(|e: std::net::AddrParseError| {
+                        NetworkError::AddressParseError(e.to_string())
+                    })?;
                 (
                     Domain::for_address(socket_addr),
                     Type::STREAM,
@@ -99,7 +108,7 @@ impl GenericSocket {
         };
 
         let socket = Socket::new(domain, socket_type, Some(protocol))?;
-        
+
         Ok(Self {
             socket,
             endpoint,
@@ -125,14 +134,14 @@ impl GenericSocket {
         }
     }
 
-    pub fn start_listener<C>(&mut self, controller: Arc<Mutex<C>>) -> NetworkResult<()> 
+    pub fn start_listener<C>(&mut self, controller: Arc<Mutex<C>>) -> NetworkResult<()>
     where
         C: NetworkEventController + 'static,
     {
         if self.listening {
             return Ok(());
         }
-        
+
         self.listening = true;
         self.socket.set_nonblocking(true)?;
         self.socket.set_reuse_address(true)?;
@@ -142,76 +151,80 @@ impl GenericSocket {
             Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
                 self.start_datagram_listener(addr.clone(), controller)
             }
-            Endpoint::Tcp(addr) => {
-                self.start_stream_listener(addr.clone(), controller)
-            }
+            Endpoint::Tcp(addr) => self.start_stream_listener(addr.clone(), controller),
         }
     }
 
-    fn start_datagram_listener<C>(&mut self, address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
+    fn start_datagram_listener<C>(
+        &mut self,
+        address: String,
+        controller: Arc<Mutex<C>>,
+    ) -> NetworkResult<()>
     where
         C: NetworkEventController + 'static,
     {
         let mut socket = self.socket.try_clone()?;
         let endpoint = self.endpoint.clone();
-        
+
         TOKIO_RUNTIME.spawn_blocking(move || {
             let mut buffer = vec![0u8; 8192];
             loop {
                 match socket.read(&mut buffer) {
                     Ok(size) => {
-                        println!("UDP/BP received {} bytes on {}", size, address);
-                        
+                        println!("UDP/BP received {size} bytes on {address}");
+
                         let controller_clone = Arc::clone(&controller);
                         let endpoint_clone = endpoint.clone();
                         let data = buffer[0..size].to_vec();
-                        
+
                         TOKIO_RUNTIME.spawn(async move {
-                            Self::handle_received_data(data, controller_clone, endpoint_clone).await;
+                            Self::handle_received_data(data, controller_clone, endpoint_clone)
+                                .await;
                         });
                     }
                     Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(10));
                     }
                     Err(e) => {
-                        eprintln!("UDP/BP Error: {}", e);
+                        eprintln!("UDP/BP Error: {e}");
                         break;
                     }
                 }
             }
         });
-        
+
         Ok(())
     }
 
-    fn start_stream_listener<C>(&mut self, _address: String, controller: Arc<Mutex<C>>) -> NetworkResult<()>
+    fn start_stream_listener<C>(
+        &mut self,
+        _address: String,
+        controller: Arc<Mutex<C>>,
+    ) -> NetworkResult<()>
     where
         C: NetworkEventController + 'static,
     {
         self.socket.listen(128)?;
         let socket = self.socket.try_clone()?;
-        
-        TOKIO_RUNTIME.spawn_blocking(move || {
-            loop {
-                match socket.accept() {
-                    Ok((stream, _)) => {
-                        
-                        let controller_clone = Arc::clone(&controller);
-                        TOKIO_RUNTIME.spawn(async move {
-                            Self::handle_tcp_connection(stream.into(), controller_clone).await;
-                        });
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(e) => {
-                        eprintln!("TCP Error: {}", e);
-                        break;
-                    }
+
+        TOKIO_RUNTIME.spawn_blocking(move || loop {
+            match socket.accept() {
+                Ok((stream, _)) => {
+                    let controller_clone = Arc::clone(&controller);
+                    TOKIO_RUNTIME.spawn(async move {
+                        Self::handle_tcp_connection(stream.into(), controller_clone).await;
+                    });
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(e) => {
+                    eprintln!("TCP Error: {e}");
+                    break;
                 }
             }
         });
-        
+
         Ok(())
     }
 
@@ -222,11 +235,15 @@ impl GenericSocket {
         let mut buffer = vec![0u8; 8192];
         match stream.read(&mut buffer) {
             Ok(size) => {
-                Self::handle_received_data(buffer[0..size].to_vec(), controller, 
-                    Endpoint::Tcp("unknown".to_string())).await;
+                Self::handle_received_data(
+                    buffer[0..size].to_vec(),
+                    controller,
+                    Endpoint::Tcp("unknown".to_string()),
+                )
+                .await;
             }
             Err(e) => {
-                eprintln!("TCP Read Error: {}", e);
+                eprintln!("TCP Read Error: {e}");
             }
         }
     }
@@ -245,12 +262,23 @@ impl GenericSocket {
             let ctrl = controller.lock().unwrap();
             match deserialized {
                 DeserializedMessage::ChatMessage(message) => {
-                    println!("📨 Received message: '{}' from {}", message.text, message.sender.name);
+                    println!(
+                        "📨 Received message: '{}' from {}",
+                        message.text, message.sender.name
+                    );
                     ctrl.notify_observers(message);
                 }
-                DeserializedMessage::Ack { message_uuid, is_read, ack_time } => {
-                    println!("✅ Received ACK for message {} (read: {}) at {}",
-                        message_uuid, is_read, ack_time.format("%H:%M:%S"));
+                DeserializedMessage::Ack {
+                    message_uuid,
+                    is_read,
+                    ack_time,
+                } => {
+                    println!(
+                        "✅ Received ACK for message {} (read: {}) at {}",
+                        message_uuid,
+                        is_read,
+                        ack_time.format("%H:%M:%S")
+                    );
                     ctrl.handle_ack_received(&message_uuid, is_read, ack_time);
                 }
             }
@@ -264,7 +292,6 @@ impl GenericSocket {
         let serialized = codec.encode_validated(message)?;
         self.send(&serialized)
     }
-
 }
 
 impl Clone for GenericSocket {
@@ -302,10 +329,7 @@ impl NetworkEventManager {
         self.peers = peers;
     }
 
-    pub fn init_controller(
-        local_peer: Peer,
-        peers: Vec<Peer>,
-    ) -> NetworkResult<Arc<Mutex<Self>>> {
+    pub fn init_controller(local_peer: Peer, peers: Vec<Peer>) -> NetworkResult<Arc<Mutex<Self>>> {
         let mut controller = Self::new();
         controller.set_local_peer(local_peer.clone());
         controller.set_peers(peers);
@@ -314,18 +338,18 @@ impl NetworkEventManager {
 
         for endpoint in &local_peer.endpoints {
             if !endpoint.is_valid() {
-                eprintln!("Skipping invalid endpoint: {:?}", endpoint);
+                eprintln!("Skipping invalid endpoint: {endpoint:?}");
                 continue;
             }
 
             match GenericSocket::new(endpoint.clone()) {
                 Ok(mut socket) => {
                     if let Err(e) = socket.start_listener(Arc::clone(&controller_arc)) {
-                        eprintln!("Failed to start listener for {:?}: {}", endpoint, e);
+                        eprintln!("Failed to start listener for {endpoint:?}: {e}");
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to create socket for {:?}: {}", endpoint, e);
+                    eprintln!("Failed to create socket for {endpoint:?}: {e}");
                 }
             }
         }
@@ -344,11 +368,17 @@ impl NetworkEventManager {
 
         if let Some(local_peer) = &self.local_peer {
             if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
-                println!("✅ Found sender peer: {} (UUID: {})", sender_peer.name, sender_peer.uuid);
-                
+                println!(
+                    "✅ Found sender peer: {} (UUID: {})",
+                    sender_peer.name, sender_peer.uuid
+                );
+
                 // Choose the best endpoint for ACK (prefer BP > TCP > UDP)
                 let target_endpoint = self.choose_ack_endpoint(sender_peer);
-                println!("🎯 Sending ACK to {} via {}", sender_peer.name, target_endpoint);
+                println!(
+                    "🎯 Sending ACK to {} via {}",
+                    sender_peer.name, target_endpoint
+                );
 
                 let msg_clone = message.clone();
                 let local_peer_uuid = local_peer.uuid.clone();
@@ -358,11 +388,11 @@ impl NetworkEventManager {
                 crate::network::socket::TOKIO_RUNTIME.spawn_blocking(move || {
                     use std::thread;
                     use std::time::Duration;
-                    
+
                     let delay_ms = crate::config::get_random_ack_delay_ms();
-                    println!("🎲 Random ACK delay: {}ms", delay_ms);
+                    println!("🎲 Random ACK delay: {delay_ms}ms");
                     if delay_ms > 0 {
-                        println!("⏱️  ACK delay: waiting {}ms before sending ACK", delay_ms);
+                        println!("⏱️  ACK delay: waiting {delay_ms}ms before sending ACK");
                         thread::sleep(Duration::from_millis(delay_ms));
                     }
 
@@ -377,12 +407,15 @@ impl NetworkEventManager {
                             );
                         }
                         Err(e) => {
-                            eprintln!("❌ Failed to create socket for ACK: {}", e);
+                            eprintln!("❌ Failed to create socket for ACK: {e}");
                         }
                     }
                 });
             } else {
-                println!("❌ Sender peer {} not found in peer list", message.sender.uuid);
+                println!(
+                    "❌ Sender peer {} not found in peer list",
+                    message.sender.uuid
+                );
             }
         } else {
             println!("❌ No local peer configured for ACK sending");
@@ -412,7 +445,7 @@ impl NetworkEventManager {
                 }
             }
         }
-        
+
         // Ultimate fallback: first valid endpoint
         sender_peer
             .endpoints
@@ -435,18 +468,25 @@ impl NetworkEventController for NetworkEventManager {
     fn notify_observers(&self, message: ChatMessage) {
         // Send automatic ACK before notifying observers
         self.send_ack_if_needed(&message);
-        
+
         for observer in &self.observers {
             observer.on_message_received(message.clone());
         }
     }
 
-    fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>) {
-        println!("🔔 Broadcasting ACK notification for message {} to {} observers", message_uuid, self.observers.len());
+    fn handle_ack_received(
+        &self,
+        message_uuid: &str,
+        is_read: bool,
+        ack_time: chrono::DateTime<chrono::Utc>,
+    ) {
+        println!(
+            "🔔 Broadcasting ACK notification for message {} to {} observers",
+            message_uuid,
+            self.observers.len()
+        );
         for observer in &self.observers {
             observer.on_ack_received(message_uuid, is_read, ack_time);
         }
     }
 }
-
-

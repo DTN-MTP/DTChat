@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use crate::network::Endpoint;
+use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Peer {

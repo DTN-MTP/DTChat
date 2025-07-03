@@ -1,9 +1,9 @@
-use crate::ui::menu::NavigationItems;
-use crate::ui::components::message_settings::RoomView;
-use crate::ui::app::display;
-use crate::domain::{Peer, Room, ChatMessage, MessageStatus};
 use crate::config::PredictionConfig;
-use crate::network::{SocketObserver, NetworkEngine};
+use crate::domain::{ChatMessage, MessageStatus, Peer, Room};
+use crate::network::{NetworkEngine, SocketObserver};
+use crate::ui::app::display;
+use crate::ui::components::message_settings::RoomView;
+use crate::ui::menu::NavigationItems;
 use chrono::{DateTime, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
@@ -173,14 +173,14 @@ impl SocketObserver for Mutex<ChatModel> {
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
         let mut model = self.lock().unwrap();
-        println!("🎯 Model processing ACK for message {} (read: {})", message_uuid, is_read);
-        
+        println!("🎯 Model processing ACK for message {message_uuid} (read: {is_read})");
+
         if model.update_message_with_ack(message_uuid, is_read, ack_time) {
-            println!("✅ Model updated message {} with ACK - triggering UI refresh", message_uuid);
+            println!("✅ Model updated message {message_uuid} with ACK - triggering UI refresh");
             // Trigger UI update
             model.notify_observers(AppEvent::Sent("Message status updated".to_string()));
         } else {
-            println!("⚠️  Model: ACK received for unknown message: {}", message_uuid);
+            println!("⚠️  Model: ACK received for unknown message: {message_uuid}");
         }
     }
 }

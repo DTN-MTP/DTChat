@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use crate::domain::Peer;
+use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageStatus {
@@ -45,7 +45,7 @@ impl ChatMessage {
             }
         }
     }
-    
+
     pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
             MessageStatus::Sent(tx, pbat_opt) => {
@@ -65,18 +65,27 @@ impl ChatMessage {
     }
 
     pub fn update_with_ack(&mut self, _is_read: bool, ack_time: DateTime<Utc>) {
-        println!("🔄 Updating message {} with ACK at {}", self.uuid, ack_time.format("%H:%M:%S"));
-        
+        println!(
+            "🔄 Updating message {} with ACK at {}",
+            self.uuid,
+            ack_time.format("%H:%M:%S")
+        );
+
         match self.shipment_status {
             MessageStatus::Sent(sent_time, _pbat) => {
-                println!("📦 Message {} status: Sent -> Acknowledged (delay: {:.2}s)", 
-                         self.uuid, 
-                         (ack_time.timestamp_millis() - sent_time.timestamp_millis()) as f64 / 1000.0);
+                println!(
+                    "📦 Message {} status: Sent -> Acknowledged (delay: {:.2}s)",
+                    self.uuid,
+                    (ack_time.timestamp_millis() - sent_time.timestamp_millis()) as f64 / 1000.0
+                );
                 // For now, we only distinguish between sent and acknowledged
                 self.shipment_status = MessageStatus::Received(sent_time, ack_time);
             }
             _ => {
-                println!("⚠️  Message {} already in received state, ignoring ACK", self.uuid);
+                println!(
+                    "⚠️  Message {} already in received state, ignoring ACK",
+                    self.uuid
+                );
             }
         }
     }

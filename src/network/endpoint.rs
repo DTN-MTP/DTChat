@@ -23,11 +23,11 @@ pub enum NetworkError {
 impl fmt::Display for NetworkError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NetworkError::InvalidFormat(msg) => write!(f, "Invalid endpoint format: {}", msg),
-            NetworkError::UnsupportedScheme(scheme) => write!(f, "Unsupported scheme: {}", scheme),
-            NetworkError::Io(err) => write!(f, "IO error: {}", err),
-            NetworkError::AddressParseError(msg) => write!(f, "Address parse error: {}", msg),
-            NetworkError::BpNotImplemented(msg) => write!(f, "BP scheme not implemented: {}", msg),
+            NetworkError::InvalidFormat(msg) => write!(f, "Invalid endpoint format: {msg}"),
+            NetworkError::UnsupportedScheme(scheme) => write!(f, "Unsupported scheme: {scheme}"),
+            NetworkError::Io(err) => write!(f, "IO error: {err}"),
+            NetworkError::AddressParseError(msg) => write!(f, "Address parse error: {msg}"),
+            NetworkError::BpNotImplemented(msg) => write!(f, "BP scheme not implemented: {msg}"),
         }
     }
 }
@@ -60,9 +60,7 @@ pub enum Endpoint {
 impl Endpoint {
     pub fn is_valid(&self) -> bool {
         match self {
-            Endpoint::Udp(addr) | Endpoint::Tcp(addr) => {
-                addr.parse::<SocketAddr>().is_ok()
-            }
+            Endpoint::Udp(addr) | Endpoint::Tcp(addr) => addr.parse::<SocketAddr>().is_ok(),
             Endpoint::Bp(addr) => {
                 !addr.contains("PLACEHOLDER")
                     && !addr.is_empty()
@@ -99,9 +97,9 @@ impl Endpoint {
 impl fmt::Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Endpoint::Udp(addr) => write!(f, "udp://{}", addr),
-            Endpoint::Tcp(addr) => write!(f, "tcp://{}", addr),
-            Endpoint::Bp(addr) => write!(f, "bp://{}", addr),
+            Endpoint::Udp(addr) => write!(f, "udp://{addr}"),
+            Endpoint::Tcp(addr) => write!(f, "tcp://{addr}"),
+            Endpoint::Bp(addr) => write!(f, "bp://{addr}"),
         }
     }
 }
@@ -145,23 +143,30 @@ struct IpnAddr {
 
 pub fn create_bp_sockaddr(eid_string: &str) -> NetworkResult<SockAddr> {
     if eid_string.is_empty() {
-        return Err(NetworkError::InvalidFormat("EID string cannot be empty".to_string()));
+        return Err(NetworkError::InvalidFormat(
+            "EID string cannot be empty".to_string(),
+        ));
     }
 
     if let Some(eid_body) = eid_string.strip_prefix("ipn:") {
         parse_ipn_address(eid_body)
-    }
-    else if eid_string.starts_with("dtn:") {
-        Err(NetworkError::BpNotImplemented("DTN scheme not yet implemented".to_string()))
+    } else if eid_string.starts_with("dtn:") {
+        Err(NetworkError::BpNotImplemented(
+            "DTN scheme not yet implemented".to_string(),
+        ))
     } else {
-        Err(NetworkError::InvalidFormat(format!("Unsupported scheme in EID: {}", eid_string)))
+        Err(NetworkError::InvalidFormat(format!(
+            "Unsupported scheme in EID: {eid_string}"
+        )))
     }
 }
 
 fn parse_ipn_address(eid_body: &str) -> NetworkResult<SockAddr> {
     let parts: Vec<&str> = eid_body.split('.').collect();
     if parts.len() != 2 {
-        return Err(NetworkError::InvalidFormat(format!("Invalid IPN EID format: ipn:{}", eid_body)));
+        return Err(NetworkError::InvalidFormat(format!(
+            "Invalid IPN EID format: ipn:{eid_body}"
+        )));
     }
 
     let node_id: u32 = parts[0]

@@ -76,21 +76,32 @@ src/
 - **Git**: For submodule support
 - [Protobuf](https://protobuf.dev/installation/)
 
-### Running DTChat TCP local instances
+### Running DTChat local instances
 
 1. Clone the repository:
 
 ```bash
 # Clone the repository with submodules
-git clone --recursive https://github.com/DTN-MTP/DTChat.git
+git clone https://github.com/DTN-MTP/DTChat.git
 cd DTChat
 ```
-2. Open two terminal windows in the DTChat directory.
 
-3. Start `instance 1` & `instance 2` of DTChat with TCP configuration:
+Then open **two terminal windows** for the two instances of DTChat.
+
+#### For TCP Configuration
+
+Start `instance 1` & `instance 2`:
+
 ```bash
-# Start the first instance of DTChat with TCP configuration
-DTCHAT_CONFIG=db/local/tcp-<1 or 2>.yaml cargo run #  replace <1 or 2> with 1 or 2
+DTCHAT_CONFIG=db/local/tcp-<1 or 2>.yaml cargo run #  replace <1 or 2> with 1 or 2 in each terminal 
+```
+
+#### For UDP Configuration
+
+Start `UDP Instance 1` & `UDP Instance 2`:
+
+```bash
+DTCHAT_CONFIG=db/local/udp-<1 or 2>.yaml cargo run # replace <1 or 2> with 1 or 2 in each terminal
 ```
 
 ### Configuration (DTCHAT_CONFIG)
@@ -98,6 +109,8 @@ DTCHAT_CONFIG=db/local/tcp-<1 or 2>.yaml cargo run #  replace <1 or 2> with 1 or
 Three different configuration files are available in the `db` directory:
 - `local/tcp-1.yaml`: Configuration for the first local instance (TCP)
 - `local/tcp-2.yaml`: Configuration for the second local instance (TCP)
+- `local/udp-1.yaml`: Configuration for the first local instance (UDP)
+- `local/udp-2.yaml`: Configuration for the second local instance (UDP)
 - `default.yaml`: Default configuration for local testing
 - `ion.yaml`: Example configuration for ion integration (dtchat-bp-socket-testing)
 - `ud3dtn.yaml`: Example configuration for ud3dtn integration(dtchat-bp-socket-testing)
@@ -143,23 +156,6 @@ a outduct tcp 192.168.50.30:4556 tcpclo
 - **Graph View**: Timeline with delivery predictions
 - **Table View**: Structured data with timestamps
 
-## Development
-
-### Building Features
-
-```bash
-# Development build with debug features
-cargo run --features dev
-
-
-### Project Structure
-
-- **UI Components**: `src/layout/` - egui-based interface modules
-- **Network Layer**: `src/utils/socket.rs` - Bundle Protocol communication
-- **PBAT Using Routing Algorithms**: `src/utils/prediction_config.rs` - A-SABR integration
-- **Message Handling**: `src/utils/message.rs` - Data structures and serialization
-- **Configuration**: `src/utils/config.rs` - YAML-based configuration
-
 
 ## Advanced Features
 
@@ -187,21 +183,42 @@ Supports multiple transport mechanisms:
 - **ION Integration**: Direct integration with NASA's ION-DTN
 - **bp-socket**: Kernel-level Bundle Protocol support
 
-## Troubleshooting
 
-### Common Issues
+## Development & Contributing
 
-**"No route found"**
-```bash
-# Check contact plan configuration
-cat <contact_plan file>
+### Continuous Integration (CI)
 
-# Verify ION daemon status  
-ionadmin
+The CI workflow for DTChat ensures code quality for every pull request targeting the `main` branch. This automated process verifies that proposed changes meet project standards and function correctly across different platforms.
 
-# Check database.yaml configuration
-cat database.yaml
-```
+#### Main Checks
+
+- **Code Formatting**: Verifies code adheres to Rust style conventions using `cargo fmt`
+- **Static Analysis**: Detects potential issues and anti-patterns with `cargo clippy`
+- **Cross-platform Compatibility**: Tests code on Linux (Ubuntu) and macOS
+- **Rust Compatibility**: Ensures compatibility with both stable and nightly Rust versions
+- **Dependencies**: Tests compilation with the latest dependency versions
+
+#### Impact on Workflow
+
+> [!IMPORTANT]  
+> **Pull Request Requirements**
+>
+> A pull request cannot be merged if any CI check fails. This rule ensures that:
+> - Code in the main branch always remains in a functional state
+> - Quality standards are consistently enforced
+> - Issues are detected and fixed before code integration
+
+
+#### In Case of CI Failure
+
+If your pull request fails CI checks:
+1. Review the error logs in the GitHub interface
+2. Fix the reported issues locally
+3. For formatting errors: run `cargo fmt --all`
+4. For Clippy warnings: run `cargo clippy --fix --allow-dirty`
+5. Push your fixes to trigger a new CI run
+
+For more details on the CI configuration, refer to the `.github/workflows/ci.yaml` file.
 
 ## License
 

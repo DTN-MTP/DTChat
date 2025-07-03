@@ -13,13 +13,9 @@ use app::{ChatApp, ChatModel, EventHandler};
 #[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
-use config::{
-    initialize_ack_config,
-    AppConfigManager,
-    PredictionConfig,
-};
+use config::{initialize_ack_config, AppConfigManager, PredictionConfig};
 
-use network::{NetworkEngine};
+use network::NetworkEngine;
 
 #[cfg(feature = "dev")]
 use domain::{ChatMessage, MessageStatus};
@@ -35,7 +31,7 @@ fn main() -> Result<(), eframe::Error> {
     // Initialize ACK configuration at startup
     println!("🚀 Initialisation de DTChat");
     initialize_ack_config();
-    
+
     let config_path = match std::env::var("DTCHAT_CONFIG") {
         Ok(path) => path,
         Err(_) => {
@@ -151,9 +147,12 @@ fn main() -> Result<(), eframe::Error> {
         Ok(engine) => {
             let engine_arc = Arc::new(Mutex::new(engine));
             engine_arc.lock().unwrap().add_observer(model_arc.clone());
-            
+
             // Store the engine for the app to use
-            model_arc.lock().unwrap().set_network_engine(engine_arc.clone());
+            model_arc
+                .lock()
+                .unwrap()
+                .set_network_engine(engine_arc.clone());
         }
         Err(e) => {
             eprintln!("Failed to initialize network engine: {e:?}");

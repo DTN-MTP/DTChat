@@ -1,13 +1,10 @@
 use super::{
+    components::{message_forge::MessageForge, message_input::MessagePrompt},
     menu::NavigationItems,
     views::{
-        message_graph::MessageGraphView, 
+        message_graph::MessageGraphView,
         message_list::MessageListView,
         message_settings_bar::{MessageSettingsBar, RoomView},
-    },
-    components::{
-        message_forge::MessageForge,
-        message_input::MessagePrompt,
     },
 };
 use crate::app::ChatApp;

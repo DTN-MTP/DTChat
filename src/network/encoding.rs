@@ -1,11 +1,15 @@
+use crate::domain::{ChatMessage, Peer};
+use crate::network::protocols::{deserialize_message, serialize_message, DeserializedMessage};
 use crate::network::{NetworkError, NetworkResult};
-use crate::domain::{Peer, ChatMessage};
-use crate::network::protocols::{serialize_message, deserialize_message, DeserializedMessage};
 use bytes::Bytes;
 
 pub trait MessageSerializer {
     fn serialize(&self, message: &ChatMessage) -> NetworkResult<Bytes>;
-    fn deserialize(&self, data: &[u8], peers: &[Peer]) -> NetworkResult<Option<DeserializedMessage>>;
+    fn deserialize(
+        &self,
+        data: &[u8],
+        peers: &[Peer],
+    ) -> NetworkResult<Option<DeserializedMessage>>;
 }
 
 pub struct ProtobufSerializer;
@@ -15,7 +19,11 @@ impl MessageSerializer for ProtobufSerializer {
         Ok(serialize_message(message))
     }
 
-    fn deserialize(&self, data: &[u8], peers: &[Peer]) -> NetworkResult<Option<DeserializedMessage>> {
+    fn deserialize(
+        &self,
+        data: &[u8],
+        peers: &[Peer],
+    ) -> NetworkResult<Option<DeserializedMessage>> {
         Ok(deserialize_message(data, peers))
     }
 }
@@ -36,7 +44,11 @@ impl MessageSerializerEngine {
         Ok(bytes.to_vec())
     }
 
-    pub fn decode(&self, data: &[u8], peers: &[Peer]) -> NetworkResult<Option<DeserializedMessage>> {
+    pub fn decode(
+        &self,
+        data: &[u8],
+        peers: &[Peer],
+    ) -> NetworkResult<Option<DeserializedMessage>> {
         if data.is_empty() {
             return Ok(None);
         }
@@ -46,11 +58,15 @@ impl MessageSerializerEngine {
 
     pub fn validate_message(&self, message: &ChatMessage) -> NetworkResult<()> {
         if message.text.is_empty() {
-            return Err(NetworkError::InvalidFormat("Message text cannot be empty".to_string()));
+            return Err(NetworkError::InvalidFormat(
+                "Message text cannot be empty".to_string(),
+            ));
         }
 
         if message.sender.uuid.is_empty() {
-            return Err(NetworkError::InvalidFormat("Sender UUID cannot be empty".to_string()));
+            return Err(NetworkError::InvalidFormat(
+                "Sender UUID cannot be empty".to_string(),
+            ));
         }
 
         Ok(())

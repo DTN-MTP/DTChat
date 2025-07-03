@@ -7,7 +7,7 @@ use a_sabr::{
     routing::Router,
     types::{Date, NodeID},
 };
-use chrono::{Utc};
+use chrono::Utc;
 use std::collections::HashMap;
 use std::io;
 use std::sync::{Mutex, RwLock};
@@ -52,7 +52,6 @@ impl PredictionConfig {
     pub fn get_node_id(&self, ion_id: &str) -> Option<NodeID> {
         self.ion_to_node_id.read().unwrap().get(ion_id).copied()
     }
-
 
     pub fn extract_ion_node_from_endpoint(endpoint: &Endpoint) -> Option<String> {
         match endpoint {

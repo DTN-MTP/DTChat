@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use crate::app::{AppEvent, ChatApp, ChatModel, MessageDirection};
-use crate::utils::colors::COLORS;
-use crate::domain::{Peer, ChatMessage, MessageStatus};
-use crate::utils::generate_uuid;
-use crate::network::Endpoint;
+use crate::domain::{ChatMessage, MessageStatus, Peer};
 use crate::network::socket::TOKIO_RUNTIME;
+use crate::network::Endpoint;
+use crate::utils::colors::COLORS;
+use crate::utils::generate_uuid;
 use chrono::{DateTime, Utc};
 use eframe::egui;
 use egui::{vec2, CornerRadius, TextEdit};
@@ -30,14 +30,14 @@ pub fn f64_to_utc(timestamp: f64) -> DateTime<Utc> {
 pub struct MessagePrompt {}
 
 pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Peer) {
-
     // Get the NetworkEngine from the model
     let network_engine = {
         let model_guard = model.lock().unwrap();
         match model_guard.get_network_engine() {
             Some(engine) => engine,
             None => {
-                model_guard.notify_observers(AppEvent::Error("Network engine not available".to_string()));
+                model_guard
+                    .notify_observers(AppEvent::Error("Network engine not available".to_string()));
                 return;
             }
         }
@@ -64,7 +64,7 @@ pub fn manage_send(model: Arc<Mutex<ChatModel>>, msg: ChatMessage, receiver: Pee
             model_clone
                 .lock()
                 .unwrap()
-                .notify_observers(AppEvent::Error(format!("Network error: {}", e)));
+                .notify_observers(AppEvent::Error(format!("Network error: {e}")));
         }
     });
 }
@@ -166,7 +166,7 @@ impl MessagePrompt {
                     text: app.message_panel.message_to_send.clone(),
                     shipment_status: MessageStatus::Sent(Utc::now(), prediction_time),
                 };
-                
+
                 // Use TOKIO_RUNTIME.spawn_blocking for the synchronous operation
                 TOKIO_RUNTIME.spawn_blocking(move || {
                     manage_send(model_clone, msg, receiver_clone);

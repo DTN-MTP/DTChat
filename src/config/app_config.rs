@@ -1,6 +1,6 @@
+use crate::domain::{Peer, Room};
 use serde::Deserialize;
 use std::fs;
-use crate::domain::{Peer, Room};
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfigManager {
