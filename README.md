@@ -185,6 +185,16 @@ Supports multiple transport mechanisms:
 
 ## Development & Contributing
 
+### Contacts
+
+If you would like to contribute or have questions about the project, please contact:
+
+- Charley GEOFFROY: [charley.geoffroy@protonmail.com]
+- Olivier DE JONCKERE: [olivier.de-jonckere@lirmm.fr]
+- Sylvain PIERROT: [pierrot.sylvain14@gmail.com]
+
+We welcome your feedback and contributions!
+
 ### Prerequisites
 
 - **Rust Toolchain**: Ensure you have Rust 1.70+ installed
