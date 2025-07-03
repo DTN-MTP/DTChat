@@ -73,7 +73,6 @@ src/
 
 - **Rust 1.70+**: [Install Rust](https://rustup.rs/)
 - **ION-DTN or bp-socket**: Bundle Protocol daemon
-- **Git**: For submodule support
 - [Protobuf](https://protobuf.dev/installation/)
 
 ### Running DTChat local instances
@@ -185,6 +184,43 @@ Supports multiple transport mechanisms:
 
 
 ## Development & Contributing
+
+### Prerequisites
+
+- **Rust Toolchain**: Ensure you have Rust 1.70+ installed
+- **Just CLI**: Install [Just](https://just.systems/man/en)
+- **Protobuf Compiler**: Install [protoc](https://protobuf.dev/installation/)
+
+### Setting Up pre-commit Hook
+
+Before starting development, it's crucial to set up the `pre-commit` hook. This ensures that code quality checks are run locally before pushing changes, preventing issues from reaching the main branch.
+
+> [!WARNING]  
+> Setting up the pre-commit hook is vital for maintaining code quality and consistency. It ensures that all CI checks are performed locally before you push your changes.
+
+
+1. Enable the `pre-commit` hook with `just`:
+
+Before starting development, set up the pre-commit hook to ensure code quality:
+
+```bash
+just hook-setup
+```
+
+Output should be:
+
+```bash 
+🔧 Installation du hook pre-commit...
+✅ Hook pre-commit installé! Il sera exécuté avant chaque commit.
+🎯 Configuration terminée pour le développement
+Commandes utiles:
+  just fmt         - Formate le code
+  just clippy      - Analyse le code
+  just pre-commit  - Vérifie tout avant commit
+```
+
+> [!TIP]
+> You can find all available commands by running `just --list`.
 
 ### Continuous Integration (CI)
 

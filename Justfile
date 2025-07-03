@@ -21,7 +21,6 @@ clippy-fix:
     cargo clippy --fix --allow-dirty 
     @echo "🔧 Clippy a corrigé les problèmes détectés  "
 
-
 pre-commit:
     #!/bin/bash
     echo "🔍 Vérifications pre-commit..."
@@ -66,7 +65,7 @@ check-hook:
     fi
 
 # Workflow complet pour nouveau développeur
-setup: _setup-hook
+hook-setup: _setup-hook
     @echo "🎯 Configuration terminée pour le développement"
     @echo "Commandes utiles:"
     @echo "  just fmt         - Formate le code"
