@@ -3,7 +3,7 @@
 a_sabr: "../host.rc"
 local_peer:
   uuid: 1
-  name: "Instance 1"
+  name: TCP Instance 1
   endpoints:
     - type: Tcp
       address: "127.0.0.1:7001"
@@ -11,7 +11,7 @@ local_peer:
 
 peer_list:
   - uuid: 2
-    name: "Instance 2"
+    name: Instance 2
     endpoints:
       - type: Tcp
         address: "127.0.0.1:7002"
@@ -19,7 +19,7 @@ peer_list:
 
 room_list:
   - uuid: 1
-    name: "Test Room"
+    name: Test Room
     participants:
-      - "instance1"
-      - "instance2"
+      - TCP Instance 1
+      - TCP Instance 2

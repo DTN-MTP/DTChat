@@ -11,7 +11,6 @@ use std::{
 
 const AF_BP: libc::c_int = 28;
 
-/// Custom error types for network operations
 #[derive(Debug)]
 pub enum NetworkError {
     InvalidFormat(String),
@@ -48,10 +47,8 @@ impl From<io::Error> for NetworkError {
     }
 }
 
-/// Type alias for network results
 pub type NetworkResult<T> = Result<T, NetworkError>;
 
-/// Network endpoint supporting different protocols
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type", content = "address")]
 pub enum Endpoint {
@@ -61,7 +58,6 @@ pub enum Endpoint {
 }
 
 impl Endpoint {
-    /// Check if this endpoint is valid and can be used for socket operations
     pub fn is_valid(&self) -> bool {
         match self {
             Endpoint::Udp(addr) | Endpoint::Tcp(addr) => {
@@ -75,7 +71,6 @@ impl Endpoint {
         }
     }
 
-    /// Get the protocol type as a string
     pub fn protocol(&self) -> &'static str {
         match self {
             Endpoint::Udp(_) => "udp",
@@ -84,14 +79,12 @@ impl Endpoint {
         }
     }
 
-    /// Get the address part of the endpoint
     pub fn address(&self) -> &str {
         match self {
             Endpoint::Udp(addr) | Endpoint::Tcp(addr) | Endpoint::Bp(addr) => addr,
         }
     }
 
-    /// Create an endpoint from protocol and address
     pub fn new(protocol: &str, address: impl Into<String>) -> NetworkResult<Self> {
         let address = address.into();
         match protocol.to_lowercase().as_str() {
@@ -150,17 +143,14 @@ struct IpnAddr {
     service_id: u32,
 }
 
-/// Convert a Bundle Protocol EID string to a socket address
 pub fn create_bp_sockaddr(eid_string: &str) -> NetworkResult<SockAddr> {
     if eid_string.is_empty() {
         return Err(NetworkError::InvalidFormat("EID string cannot be empty".to_string()));
     }
 
-    // Handle "ipn:" scheme
     if let Some(eid_body) = eid_string.strip_prefix("ipn:") {
         parse_ipn_address(eid_body)
     }
-    // Handle unsupported schemes
     else if eid_string.starts_with("dtn:") {
         Err(NetworkError::BpNotImplemented("DTN scheme not yet implemented".to_string()))
     } else {

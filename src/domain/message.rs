@@ -64,7 +64,6 @@ impl ChatMessage {
         }
     }
 
-    /// Update message status when ACK is received
     pub fn update_with_ack(&mut self, _is_read: bool, ack_time: DateTime<Utc>) {
         println!("🔄 Updating message {} with ACK at {}", self.uuid, ack_time.format("%H:%M:%S"));
         
@@ -78,7 +77,6 @@ impl ChatMessage {
             }
             _ => {
                 println!("⚠️  Message {} already in received state, ignoring ACK", self.uuid);
-                // Message is already acknowledged or received, no update needed
             }
         }
     }

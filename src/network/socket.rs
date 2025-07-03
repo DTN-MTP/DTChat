@@ -18,7 +18,6 @@ const AF_BP: libc::c_int = 28;
 pub static TOKIO_RUNTIME: Lazy<Runtime> =
     Lazy::new(|| Runtime::new().expect("Failed to create Tokio runtime"));
 
-/// Trait for observing socket events
 pub trait SocketObserver: Send + Sync {
     fn on_message_received(&self, message: ChatMessage);
     fn on_ack_received(
@@ -29,7 +28,6 @@ pub trait SocketObserver: Send + Sync {
     );
 }
 
-/// Trait for controlling socket operations
 pub trait NetworkEventController: Send + Sync {
     fn add_observer(&mut self, observer: Arc<dyn SocketObserver>);
     fn get_peers(&self) -> Vec<Peer>;
@@ -37,7 +35,6 @@ pub trait NetworkEventController: Send + Sync {
     fn handle_ack_received(&self, message_uuid: &str, is_read: bool, ack_time: chrono::DateTime<chrono::Utc>);
 }
 
-/// Configuration for network socket operations
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SocketConfig {
@@ -58,7 +55,6 @@ impl Default for SocketConfig {
     }
 }
 
-/// Generic network socket implementation
 pub struct GenericSocket {
     socket: Socket,
     endpoint: Endpoint,
@@ -263,7 +259,6 @@ impl GenericSocket {
         }
     }
 
-    /// Send a chat message
     pub fn send_message(&mut self, message: &ChatMessage) -> NetworkResult<usize> {
         let codec = MessageSerializerEngine::new();
         let serialized = codec.encode_validated(message)?;

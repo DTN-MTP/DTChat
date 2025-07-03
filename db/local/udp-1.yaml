@@ -1,0 +1,23 @@
+a_sabr: "../host.rc"
+local_peer:
+  uuid: 10
+  name: UDP Instance 1
+  endpoints:
+    - type: Udp
+      address: "127.0.0.1:8001"
+  color: 4
+
+peer_list:
+  - uuid: 20
+    name: UDP Instance 2
+    endpoints:
+      - type: Udp
+        address: "127.0.0.1:8002"
+    color: 5
+
+room_list:
+  - uuid: 1
+    name: "UDP Test Room"
+    participants:
+      - UDP Instance 1
+      - UDP Instance 2

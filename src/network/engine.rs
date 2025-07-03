@@ -6,7 +6,6 @@ use crate::network::protocols::ack;
 use crate::domain::{Peer, ChatMessage};
 use std::sync::{Arc, Mutex};
 
-/// Network engine for managing connections and message routing
 pub struct NetworkEngine {
     controller: Arc<Mutex<NetworkEventManager>>,
     local_peer: Peer,
@@ -14,7 +13,6 @@ pub struct NetworkEngine {
 }
 
 impl NetworkEngine {
-    /// Create a new NetworkEngine instance
     pub fn new(local_peer: Peer, peers: Vec<Peer>) -> NetworkResult<Self> {
         let controller = NetworkEventManager::init_controller(local_peer.clone(), peers.clone())?;
         
@@ -25,19 +23,16 @@ impl NetworkEngine {
         })
     }
 
-    /// Add an observer to the network engine
     pub fn add_observer(&self, observer: Arc<dyn SocketObserver>) {
         let mut controller = self.controller.lock().unwrap();
         controller.add_observer(observer);
     }
 
-    /// Send a message to a specific peer
     pub fn send_message_to_peer(&self, message: &ChatMessage, peer_uuid: &str) -> NetworkResult<()> {
         let target_peer = self.peers.iter()
             .find(|p| p.uuid == peer_uuid)
             .ok_or_else(|| NetworkError::InvalidFormat(format!("Peer not found: {}", peer_uuid)))?;
 
-        // Try to send using the first valid endpoint
         for endpoint in &target_peer.endpoints {
             if endpoint.is_valid() {
                 match self.send_message_to_endpoint(message, endpoint) {
@@ -56,14 +51,12 @@ impl NetworkEngine {
         Err(NetworkError::InvalidFormat(format!("No valid endpoints for peer: {}", peer_uuid)))
     }
 
-    /// Send a message to a specific endpoint
     pub fn send_message_to_endpoint(&self, message: &ChatMessage, endpoint: &Endpoint) -> NetworkResult<()> {
         let mut socket = GenericSocket::new(endpoint.clone())?;
         socket.send_message(message)?;
         Ok(())
     }
 
-    /// Send an ACK message
     pub fn send_ack(&self, original_message: &ChatMessage, target_endpoint: &Endpoint) -> NetworkResult<()> {
         let mut socket = GenericSocket::new(target_endpoint.clone())?;
         ack::send_ack_message_non_blocking(
@@ -75,22 +68,18 @@ impl NetworkEngine {
         Ok(())
     }
 
-    /// Get the local peer
     pub fn local_peer(&self) -> &Peer {
         &self.local_peer
     }
 
-    /// Get all peers
     pub fn peers(&self) -> &[Peer] {
         &self.peers
     }
 
-    /// Find a peer by UUID
     pub fn find_peer(&self, uuid: &str) -> Option<&Peer> {
         self.peers.iter().find(|p| p.uuid == uuid)
     }
 
-    /// Add a new peer
     pub fn add_peer(&mut self, peer: Peer) {
         self.peers.push(peer.clone());
         let mut controller = self.controller.lock().unwrap();
@@ -99,7 +88,6 @@ impl NetworkEngine {
         controller.set_peers(updated_peers);
     }
 
-    /// Remove a peer
     pub fn remove_peer(&mut self, uuid: &str) -> bool {
         if let Some(pos) = self.peers.iter().position(|p| p.uuid == uuid) {
             self.peers.remove(pos);
@@ -111,7 +99,6 @@ impl NetworkEngine {
         }
     }
 
-    /// Get network statistics
     pub fn get_stats(&self) -> NetworkStats {
         NetworkStats {
             local_peer_endpoints: self.local_peer.endpoints.len(),
@@ -121,15 +108,12 @@ impl NetworkEngine {
     }
 }
 
-/// Network statistics
 #[derive(Debug, Clone)]
 pub struct NetworkStats {
     pub local_peer_endpoints: usize,
     pub total_peers: usize,
     pub active_connections: usize,
 }
-
-/// Default observer implementation for logging
 pub struct LoggingObserver;
 
 impl SocketObserver for LoggingObserver {
