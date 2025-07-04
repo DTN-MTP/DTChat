@@ -29,9 +29,7 @@ pub fn serialize_message(message: &ChatMessage) -> Bytes {
 pub fn deserialize_message(buf: &[u8], peers: &[Peer]) -> Option<DeserializedMessage> {
     use prost::Message;
     match dtchat_proto::ProtoMessage::decode(buf) {
-        Ok(proto_msg) => {
-            extract_message_from_proto(proto_msg, peers)
-        }
+        Ok(proto_msg) => extract_message_from_proto(proto_msg, peers),
         Err(e) => {
             println!("❌ Failed to decode protobuf message: {e:?}");
             println!("❌ Buffer content: {buf:?}");

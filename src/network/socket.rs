@@ -148,8 +148,8 @@ impl GenericSocket {
         self.socket.bind(&self.sockaddr)?;
 
         match &self.endpoint {
-            Endpoint::Udp(addr) | Endpoint::Bp(addr) => {
-                self.start_datagram_listener(addr.clone(), controller)
+            Endpoint::Udp(_addr) | Endpoint::Bp(_addr) => {
+                self.start_datagram_listener(controller)
             }
             Endpoint::Tcp(addr) => self.start_stream_listener(addr.clone(), controller),
         }
@@ -157,7 +157,6 @@ impl GenericSocket {
 
     fn start_datagram_listener<C>(
         &mut self,
-        address: String,
         controller: Arc<Mutex<C>>,
     ) -> NetworkResult<()>
     where
@@ -171,7 +170,6 @@ impl GenericSocket {
             loop {
                 match socket.read(&mut buffer) {
                     Ok(size) => {
-
                         let controller_clone = Arc::clone(&controller);
                         let endpoint_clone = endpoint.clone();
                         let data = buffer[0..size].to_vec();
@@ -366,7 +364,6 @@ impl NetworkEventManager {
 
         if let Some(local_peer) = &self.local_peer {
             if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
-
                 // Choose the best endpoint for ACK (prefer BP > TCP > UDP)
                 let target_endpoint = self.choose_ack_endpoint(sender_peer);
                 println!(

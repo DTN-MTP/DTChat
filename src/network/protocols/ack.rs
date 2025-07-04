@@ -95,7 +95,6 @@ pub fn send_ack_message_non_blocking(
     local_peer_uuid: &str,
     is_read: bool,
 ) {
-
     let msg_clone = received_msg.clone();
     let mut socket_clone = socket.clone();
     let local_peer_uuid_clone = local_peer_uuid.to_string();
@@ -110,6 +109,6 @@ pub fn send_ack_message_non_blocking(
         .await
         {
             eprintln!("❌ ACK task failed for message {}: {}", msg_clone.uuid, e);
-        } 
+        }
     });
 }

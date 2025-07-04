@@ -22,7 +22,6 @@ pub struct PredictionConfig {
 
 impl PredictionConfig {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
-
         let (nodes, contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
 
         let ion_to_node_id = Self::map_node_indices(contact_plan)?;

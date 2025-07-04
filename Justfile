@@ -23,6 +23,7 @@ clippy-fix:
 
 pre-commit:
     #!/bin/bash
+    set -e
     echo "🔍 Vérifications pre-commit..."
     
     if git diff --cached --name-only | grep -q "\.rs$"; then
@@ -34,7 +35,7 @@ pre-commit:
     fi
     
     echo "✅ Vérifications terminées!"
-
+    
 # Installe le hook git pre-commit
 _setup-hook:
     #!/bin/bash

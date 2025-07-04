@@ -20,21 +20,20 @@ impl AppConfig {
     pub fn from_env_or_default() -> Self {
         let config_path = match std::env::var("DTCHAT_CONFIG") {
             Ok(path) => {
-                println!("📁 Configuration chargée depuis DTCHAT_CONFIG: {}", path);
+                println!("📁 Configuration chargée depuis DTCHAT_CONFIG: {path}");
                 path
             }
             Err(_) => {
                 let default_path = "db/default.yaml".to_string();
                 println!(
-                    "📁 Variable DTCHAT_CONFIG non trouvée. Utilisation de la configuration par défaut: {}",
-                    default_path
+                    "📁 Variable DTCHAT_CONFIG non trouvée. Utilisation de la configuration par défaut: {default_path}"
                 );
                 default_path
             }
         };
 
         Self::from_file(&config_path).unwrap_or_else(|e| {
-            panic!("❌ Échec du chargement de la configuration depuis '{}': {}", config_path, e);
+            panic!("❌ Échec du chargement de la configuration depuis '{config_path}': {e}");
         })
     }
 }
