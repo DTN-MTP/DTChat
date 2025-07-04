@@ -35,8 +35,7 @@ pre-commit:
     fi
     
     echo "✅ Vérifications terminées!"
-    
-# Installe le hook git pre-commit
+
 _setup-hook:
     #!/bin/bash
     echo "🔧 Installation du hook pre-commit..."
@@ -49,12 +48,10 @@ _setup-hook:
         chmod +x .git/hooks/pre-commit
         echo "✅ Hook pre-commit installé! Il sera exécuté avant chaque commit."
 
-# Désinstalle le hook git
 remove-hook:
     rm -f .git/hooks/pre-commit
     @echo "🗑️ Hook pre-commit supprimé"
 
-# Vérifie si le hook est installé
 check-hook:
     #!/bin/bash
     if [ -f .git/hooks/pre-commit ]; then
@@ -65,7 +62,6 @@ check-hook:
         echo "Lancez 'just setup' pour l'installer"
     fi
 
-# Workflow complet pour nouveau développeur
 hook-setup: _setup-hook
     @echo "🎯 Configuration terminée pour le développement"
     @echo "Commandes utiles:"
@@ -73,6 +69,5 @@ hook-setup: _setup-hook
     @echo "  just clippy      - Analyse le code"
     @echo "  just pre-commit  - Vérifie tout avant commit"
 
-# Commande pour vérifier la qualité du code
 quality: check-fmt clippy
     @echo "💎 Vérification qualité terminée"

@@ -148,17 +148,12 @@ impl GenericSocket {
         self.socket.bind(&self.sockaddr)?;
 
         match &self.endpoint {
-            Endpoint::Udp(_addr) | Endpoint::Bp(_addr) => {
-                self.start_datagram_listener(controller)
-            }
+            Endpoint::Udp(_addr) | Endpoint::Bp(_addr) => self.start_datagram_listener(controller),
             Endpoint::Tcp(addr) => self.start_stream_listener(addr.clone(), controller),
         }
     }
 
-    fn start_datagram_listener<C>(
-        &mut self,
-        controller: Arc<Mutex<C>>,
-    ) -> NetworkResult<()>
+    fn start_datagram_listener<C>(&mut self, controller: Arc<Mutex<C>>) -> NetworkResult<()>
     where
         C: NetworkEventController + 'static,
     {
