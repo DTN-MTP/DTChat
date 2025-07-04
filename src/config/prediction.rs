@@ -22,8 +22,6 @@ pub struct PredictionConfig {
 
 impl PredictionConfig {
     pub fn new(contact_plan: &str) -> io::Result<Self> {
-        println!("RAW contact plan : ");
-        println!("{contact_plan}");
 
         let (nodes, contacts) = IONContactPlan::parse::<NoManagement, EVLManager>(contact_plan)?;
 

@@ -185,8 +185,6 @@ Supports multiple transport mechanisms:
 
 ## Development & Contributing
 
-### Contacts
-
 If you would like to contribute or have questions about the project, please contact:
 
 - Charley GEOFFROY: [charley.geoffroy@protonmail.com]

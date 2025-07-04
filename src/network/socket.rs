@@ -171,7 +171,6 @@ impl GenericSocket {
             loop {
                 match socket.read(&mut buffer) {
                     Ok(size) => {
-                        println!("UDP/BP received {size} bytes on {address}");
 
                         let controller_clone = Arc::clone(&controller);
                         let endpoint_clone = endpoint.clone();
@@ -364,14 +363,9 @@ impl NetworkEventManager {
         }
 
         println!("📤 Auto-sending ACK for message: '{}'", message.text);
-        println!("🔍 Looking for sender with UUID: {}", message.sender.uuid);
 
         if let Some(local_peer) = &self.local_peer {
             if let Some(sender_peer) = self.peers.iter().find(|p| p.uuid == message.sender.uuid) {
-                println!(
-                    "✅ Found sender peer: {} (UUID: {})",
-                    sender_peer.name, sender_peer.uuid
-                );
 
                 // Choose the best endpoint for ACK (prefer BP > TCP > UDP)
                 let target_endpoint = self.choose_ack_endpoint(sender_peer);
@@ -390,7 +384,6 @@ impl NetworkEventManager {
                     use std::time::Duration;
 
                     let delay_ms = crate::config::get_random_ack_delay_ms();
-                    println!("🎲 Random ACK delay: {delay_ms}ms");
                     if delay_ms > 0 {
                         println!("⏱️  ACK delay: waiting {delay_ms}ms before sending ACK");
                         thread::sleep(Duration::from_millis(delay_ms));

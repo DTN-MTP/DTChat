@@ -34,11 +34,6 @@ pub fn create_ack_message(
     local_peer_uuid: &str,
     is_read: bool,
 ) -> dtchat_proto::ProtoMessage {
-    println!(
-        "🔧 Creating ACK message for message {} (read: {})",
-        received_msg.uuid, is_read
-    );
-
     let delivery_status = DeliveryStatus {
         message_uuid: received_msg.uuid.clone(),
         received: true,
@@ -46,10 +41,6 @@ pub fn create_ack_message(
     };
 
     let ack_uuid = generate_uuid();
-    println!(
-        "📋 ACK details - UUID: {}, Target: {}, Read status: {}",
-        ack_uuid, received_msg.uuid, is_read
-    );
 
     dtchat_proto::ProtoMessage {
         uuid: ack_uuid,
@@ -67,11 +58,6 @@ pub async fn send_ack_message(
     is_read: bool,
 ) -> AckResult<()> {
     use prost::Message;
-
-    println!(
-        "📤 Starting ACK transmission for message {}",
-        received_msg.uuid
-    );
     let ack_proto_msg = create_ack_message(received_msg, local_peer_uuid, is_read);
 
     let mut buf = bytes::BytesMut::with_capacity(ack_proto_msg.encoded_len());
@@ -109,10 +95,6 @@ pub fn send_ack_message_non_blocking(
     local_peer_uuid: &str,
     is_read: bool,
 ) {
-    println!(
-        "🚀 Spawning async ACK task for message {}",
-        received_msg.uuid
-    );
 
     let msg_clone = received_msg.clone();
     let mut socket_clone = socket.clone();
@@ -128,8 +110,6 @@ pub fn send_ack_message_non_blocking(
         .await
         {
             eprintln!("❌ ACK task failed for message {}: {}", msg_clone.uuid, e);
-        } else {
-            println!("🎯 ACK task completed for message {}", msg_clone.uuid);
-        }
+        } 
     });
 }

@@ -22,7 +22,6 @@ impl MessageListView {
 
     pub fn show(&mut self, app: &mut ChatApp, ui: &mut egui::Ui) {
         let mut locked_model = app.model_arc.lock().unwrap();
-        //let sort_for_peer = locked_model.localpeer.clone();
         let sort_strat = locked_model.sort_strategy.clone();
         let local_peer = locked_model.localpeer.clone();
 

@@ -13,7 +13,7 @@ use app::{ChatApp, ChatModel, EventHandler};
 #[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
-use config::{initialize_ack_config, AppConfigManager, PredictionConfig};
+use config::{initialize_ack_config, initialize_app_config, PredictionConfig};
 
 use network::NetworkEngine;
 
@@ -32,17 +32,7 @@ fn main() -> Result<(), eframe::Error> {
     println!("🚀 Initialisation de DTChat");
     initialize_ack_config();
 
-    let config_path = match std::env::var("DTCHAT_CONFIG") {
-        Ok(path) => path,
-        Err(_) => {
-            let default_path = "db/default.yaml".to_string();
-            println!(
-                "No DTCHAT_CONFIG environment variable found. Using default configuration: {default_path}"
-            );
-            default_path
-        }
-    };
-    let config: AppConfigManager = AppConfigManager::load_yaml_from_file(&config_path);
+    let config = initialize_app_config();
 
     let shared_peers = config.peer_list;
     let shared_rooms = config.room_list;
@@ -50,7 +40,9 @@ fn main() -> Result<(), eframe::Error> {
     let contact_plan = config.a_sabr;
 
     if !Path::new(&contact_plan).exists() {
-        eprintln!("Contact plan missing !!!");
+        eprintln!("❌ Contact plan missing at: {contact_plan}");
+    } else {
+        println!("📄 Contact plan found at: {contact_plan}");
     }
 
     #[cfg(feature = "dev")]

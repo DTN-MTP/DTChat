@@ -124,7 +124,7 @@ impl MessageGraphView {
             .auto_reset(reset_requested)
             .show(ui, |plot_ui| {
                 plot_ui.vline(
-                    VLine::new("Current Time", now)
+                    VLine::new(now)
                         .name("Current Time")
                         .color(Color32::from_rgb(255, 0, 0)),
                 );
@@ -135,7 +135,8 @@ impl MessageGraphView {
                     // Create a new String that we can move into the closure
                     let formatter_peer_name = peer_name.clone();
 
-                    let box_for_senders = BoxPlot::new(peer_name.clone(), boxes)
+                    let box_for_senders = BoxPlot::new(boxes)
+                        .name(peer_name.clone())
                         .color(peer.get_color())
                         .horizontal()
                         .allow_hover(true)
