@@ -1,9 +1,4 @@
-# Variables
-rust_version := "stable"
 target_dir := "target"
-
-default:
-    @just --list
 
 fmt:
     cargo fmt --all
@@ -11,7 +6,7 @@ fmt:
 
 check-fmt:
     @echo "🔍 Vérification du formatage..."
-    cargo fmt -- --check
+    cargo fmt --all -- --check
 
 clippy:
     @echo "🔍 Analyse clippy en cours..."
@@ -19,7 +14,7 @@ clippy:
 
 clippy-fix:
     cargo clippy --fix --allow-dirty 
-    @echo "🔧 Clippy a corrigé les problèmes détectés  "
+    @echo "🔧 Clippy a corrigé les problèmes détectés"
 
 pre-commit:
     #!/bin/bash
