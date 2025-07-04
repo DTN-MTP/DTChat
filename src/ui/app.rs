@@ -8,15 +8,15 @@ use super::{
     },
 };
 use crate::app::ChatApp;
-use crate::ui::menu::MenuBar;
 use eframe::egui;
 use egui::{CentralPanel, TopBottomPanel};
 
 pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
-    TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-        let mut menu = MenuBar::new();
-        menu.show(app, ui);
-    });
+    // TODO: Uncomment this when we have a menu bar ready.
+    // TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+    //     let mut menu = MenuBar::new();
+    //     menu.show(app, ui);
+    // });
 
     match app.context_menu {
         NavigationItems::Rooms => {

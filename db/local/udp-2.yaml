@@ -17,7 +17,7 @@ peer_list:
 
 room_list:
   - uuid: 1
-    name: UDP Test Room
+    name: Default
     participants:
       - UDP Instance 1
       - UDP Instance 2

@@ -2,7 +2,7 @@ use crate::app::ChatApp;
 use eframe::egui;
 use egui::{Align, ComboBox, Layout};
 
-use crate::ui::views::rooms::actions::create_room::CreateRoomForm;
+// use crate::ui::views::rooms::actions::create_room::CreateRoomForm;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoomView {
@@ -71,17 +71,18 @@ impl MessageSettingsBar {
                     });
             });
 
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.button("New Room").clicked() {
-                    app.message_panel.create_modal_open = true;
-                }
-            });
+            // TODO: Uncomment this section when you want to add a button for creating a new room.
+            // ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            //     if ui.button("New Room").clicked() {
+            //         app.message_panel.create_modal_open = true;
+            //     }
+            // });
         });
-
-        if app.message_panel.create_modal_open {
-            let mut create_room_modal = CreateRoomForm::new();
-            create_room_modal.show(app, ui);
-        }
+        // TODO: Uncomment this section when you want to add a modal for creating a new room.
+        // if app.message_panel.create_modal_open {
+        //     let mut create_room_modal = CreateRoomForm::new();
+        //     create_room_modal.show(app, ui);
+        // }
 
         ui.add_space(4.0);
     }

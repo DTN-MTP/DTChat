@@ -17,7 +17,7 @@ peer_list:
 
 room_list:
   - uuid: 1
-    name: Test Room
+    name: Default
     participants:
       - TCP Instance 1
       - TCP Instance 2
