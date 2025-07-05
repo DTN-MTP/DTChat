@@ -1,6 +1,6 @@
 use super::{
     components::{message_forge::MessageForge, message_input::MessagePrompt},
-    menu::NavigationItems,
+    menu::{NavigationItems, Header},
     views::{
         message_graph::MessageGraphView,
         message_list::MessageListView,
@@ -12,6 +12,12 @@ use eframe::egui;
 use egui::{CentralPanel, TopBottomPanel};
 
 pub fn display(app: &mut ChatApp, ctx: &egui::Context) {
+    // Corporate header at the top
+    TopBottomPanel::top("corporate_header").show(ctx, |ui| {
+        let mut header = Header::new();
+        header.show(ui);
+    });
+
     // TODO: Uncomment this when we have a menu bar ready.
     // TopBottomPanel::top("menu_bar").show(ctx, |ui| {
     //     let mut menu = MenuBar::new();

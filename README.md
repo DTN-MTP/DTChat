@@ -74,33 +74,44 @@ src/
 - **Rust 1.70+**: [Install Rust](https://rustup.rs/)
 - **ION-DTN or bp-socket**: Bundle Protocol daemon
 - [Protobuf](https://protobuf.dev/installation/)
+- **Just**: [Install Just](https://just.systems/)
+### Running DTChat Local Instances
 
-### Running DTChat local instances
+You can launch two local DTChat instances for testing, either manually or using the `just` command.
 
-1. Clone the repository:
+#### 1. Manual Method
 
+Open **two terminal windows** and run:
+
+**For TCP:**
 ```bash
-# Clone the repository with submodules
-git clone https://github.com/DTN-MTP/DTChat.git
-cd DTChat
+DTCHAT_CONFIG=db/local/tcp-1.yaml cargo run   # Terminal 1
+DTCHAT_CONFIG=db/local/tcp-2.yaml cargo run   # Terminal 2
 ```
 
-Then open **two terminal windows** for the two instances of DTChat.
-
-#### For TCP Configuration
-
-Start `instance 1` & `instance 2`:
-
+**For UDP:**
 ```bash
-DTCHAT_CONFIG=db/local/tcp-<1 or 2>.yaml cargo run #  replace <1 or 2> with 1 or 2 in each terminal 
+DTCHAT_CONFIG=db/local/udp-1.yaml cargo run   # Terminal 1
+DTCHAT_CONFIG=db/local/udp-2.yaml cargo run   # Terminal 2
 ```
 
-#### For UDP Configuration
-
-Start `UDP Instance 1` & `UDP Instance 2`:
-
+To enable artificial ACK delay (for testing), set the `DTCHAT_ACK_DELAY` environment variable and use the `ack-delay` feature:
 ```bash
-DTCHAT_CONFIG=db/local/udp-<1 or 2>.yaml cargo run # replace <1 or 2> with 1 or 2 in each terminal
+DTCHAT_CONFIG=db/local/tcp-1.yaml DTCHAT_ACK_DELAY=2 cargo run --features ack-delay
+```
+
+#### 2. Using Just (Recommended)
+
+If you have [`just`](https://just.systems/) installed, simply run in two terminals:
+
+**For TCP or UDP:**
+
+```md
+just dtchat run <socket> <instance> <delay>
+    → Démarre DTChat avec paramètres spécifiques
+    → socket   : tcp|udp - Type de connexion
+    → instance : 1|2 - Numéro d'instance
+    → delay    : Délai en ms pour ack-delay (vide = désactivé)
 ```
 
 ### Configuration (DTCHAT_CONFIG)
