@@ -1,6 +1,6 @@
 use crate::domain::{ChatMessage, Peer};
 use crate::network::protocols::{deserialize_message, serialize_message, DeserializedMessage};
-use crate::network::{NetworkError, NetworkResult};
+use crate::network::NetworkResult;
 use bytes::Bytes;
 
 pub trait MessageSerializer {
@@ -54,27 +54,6 @@ impl MessageSerializerEngine {
         }
 
         self.serializer.deserialize(data, peers)
-    }
-
-    pub fn validate_message(&self, message: &ChatMessage) -> NetworkResult<()> {
-        if message.text.is_empty() {
-            return Err(NetworkError::InvalidFormat(
-                "Message text cannot be empty".to_string(),
-            ));
-        }
-
-        if message.sender.uuid.is_empty() {
-            return Err(NetworkError::InvalidFormat(
-                "Sender UUID cannot be empty".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub fn encode_validated(&self, message: &ChatMessage) -> NetworkResult<Vec<u8>> {
-        self.validate_message(message)?;
-        self.encode(message)
     }
 }
 

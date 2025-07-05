@@ -48,18 +48,18 @@ impl ChatMessage {
 
     pub fn get_timestamps(&self) -> (f64, Option<f64>, Option<f64>) {
         match self.shipment_status {
-            MessageStatus::Sent(tx, pbat_opt) => {
-                let pbat_val = pbat_opt.unwrap_or(tx);
+            MessageStatus::Sent(sent_time, pbat_opt) => {
+                let pbat_val = pbat_opt.unwrap_or(sent_time);
                 (
-                    tx.timestamp_millis() as f64,
+                    sent_time.timestamp_millis() as f64,
                     Some(pbat_val.timestamp_millis() as f64),
                     None,
                 )
             }
-            MessageStatus::Received(tx, rx) => (
-                tx.timestamp_millis() as f64,
+            MessageStatus::Received(sent_time, received_time) => (
+                sent_time.timestamp_millis() as f64,
                 None,
-                Some(rx.timestamp_millis() as f64),
+                Some(received_time.timestamp_millis() as f64),
             ),
         }
     }

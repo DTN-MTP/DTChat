@@ -200,7 +200,6 @@ If you would like to contribute or have questions about the project, please cont
 
 - Charley GEOFFROY: [charley.geoffroy@protonmail.com]
 - Olivier DE JONCKERE: [olivier.de-jonckere@lirmm.fr]
-- Sylvain PIERROT: [pierrot.sylvain14@gmail.com]
 
 We welcome your feedback and contributions!
 
@@ -239,7 +238,7 @@ Commandes utiles:
 ```
 
 > [!TIP]
-> You can find all available commands by running `just --list`.
+> You can find all available commands by running `just help`.
 
 ### Continuous Integration (CI)
 

@@ -278,12 +278,6 @@ impl GenericSocket {
             eprintln!("Failed to deserialize received data");
         }
     }
-
-    pub fn send_message(&mut self, message: &ChatMessage) -> NetworkResult<usize> {
-        let codec = MessageSerializerEngine::new();
-        let serialized = codec.encode_validated(message)?;
-        self.send(&serialized)
-    }
 }
 
 impl Clone for GenericSocket {

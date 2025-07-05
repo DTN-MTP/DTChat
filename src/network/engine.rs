@@ -1,25 +1,35 @@
 use crate::domain::{ChatMessage, Peer};
-use crate::network::protocols::ack;
 use crate::network::{
-    socket::{GenericSocket, NetworkEventController, NetworkEventManager, SocketObserver},
-    Endpoint, NetworkError, NetworkResult,
+    message_router::MessageRouter,
+    monitor::{NetworkMonitor, NetworkStats},
+    peer_manager::PeerManager,
+    socket::{NetworkEventController, NetworkEventManager, SocketObserver},
+    Endpoint, NetworkResult,
 };
 use std::sync::{Arc, Mutex};
 
 pub struct NetworkEngine {
     controller: Arc<Mutex<NetworkEventManager>>,
-    local_peer: Peer,
-    peers: Vec<Peer>,
+    peer_manager: Arc<Mutex<PeerManager>>,
+    message_router: MessageRouter,
+    network_monitor: NetworkMonitor,
 }
 
 impl NetworkEngine {
     pub fn new(local_peer: Peer, peers: Vec<Peer>) -> NetworkResult<Self> {
-        let controller = NetworkEventManager::init_controller(local_peer.clone(), peers.clone())?;
+        let peer_manager = Arc::new(Mutex::new(PeerManager::new(
+            local_peer.clone(),
+            peers.clone(),
+        )));
+        let controller = NetworkEventManager::init_controller(local_peer, peers)?;
+        let message_router = MessageRouter::new(peer_manager.clone());
+        let network_monitor = NetworkMonitor::new(peer_manager.clone());
 
         Ok(Self {
             controller,
-            local_peer,
-            peers,
+            peer_manager,
+            message_router,
+            network_monitor,
         })
     }
 
@@ -28,35 +38,13 @@ impl NetworkEngine {
         controller.add_observer(observer);
     }
 
+    // Delegation methods to maintain the same API
     pub fn send_message_to_peer(
         &self,
         message: &ChatMessage,
         peer_uuid: &str,
     ) -> NetworkResult<()> {
-        let target_peer = self
-            .peers
-            .iter()
-            .find(|p| p.uuid == peer_uuid)
-            .ok_or_else(|| NetworkError::InvalidFormat(format!("Peer not found: {peer_uuid}")))?;
-
-        for endpoint in &target_peer.endpoints {
-            if endpoint.is_valid() {
-                match self.send_message_to_endpoint(message, endpoint) {
-                    Ok(_) => {
-                        println!("📤 Message sent to {} via {}", target_peer.name, endpoint);
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to send via {endpoint}: {e}");
-                        continue;
-                    }
-                }
-            }
-        }
-
-        Err(NetworkError::InvalidFormat(format!(
-            "No valid endpoints for peer: {peer_uuid}"
-        )))
+        self.message_router.send_message_to_peer(message, peer_uuid)
     }
 
     pub fn send_message_to_endpoint(
@@ -64,9 +52,8 @@ impl NetworkEngine {
         message: &ChatMessage,
         endpoint: &Endpoint,
     ) -> NetworkResult<()> {
-        let mut socket = GenericSocket::new(endpoint.clone())?;
-        socket.send_message(message)?;
-        Ok(())
+        self.message_router
+            .send_message_to_endpoint(message, endpoint)
     }
 
     pub fn send_ack(
@@ -74,83 +61,49 @@ impl NetworkEngine {
         original_message: &ChatMessage,
         target_endpoint: &Endpoint,
     ) -> NetworkResult<()> {
-        let mut socket = GenericSocket::new(target_endpoint.clone())?;
-        ack::send_ack_message_non_blocking(
-            original_message,
-            &mut socket,
-            &self.local_peer.uuid,
-            false, // Not read yet, just received
-        );
-        Ok(())
+        self.message_router
+            .send_ack(original_message, target_endpoint)
     }
 
-    pub fn local_peer(&self) -> &Peer {
-        &self.local_peer
+    pub fn local_peer(&self) -> Peer {
+        self.peer_manager.lock().unwrap().local_peer().clone()
     }
 
-    pub fn peers(&self) -> &[Peer] {
-        &self.peers
+    pub fn peers(&self) -> Vec<Peer> {
+        self.peer_manager.lock().unwrap().get_peers_clone()
     }
 
-    pub fn find_peer(&self, uuid: &str) -> Option<&Peer> {
-        self.peers.iter().find(|p| p.uuid == uuid)
+    pub fn find_peer(&self, uuid: &str) -> Option<Peer> {
+        self.peer_manager.lock().unwrap().find_peer(uuid).cloned()
     }
 
-    pub fn add_peer(&mut self, peer: Peer) {
-        self.peers.push(peer.clone());
+    pub fn add_peer(&self, peer: Peer) {
+        let mut peer_manager = self.peer_manager.lock().unwrap();
+        peer_manager.add_peer(peer.clone());
+
+        // Update controller with new peers
         let mut controller = self.controller.lock().unwrap();
-        let mut updated_peers = controller.get_peers();
-        updated_peers.push(peer);
-        controller.set_peers(updated_peers);
+        controller.set_peers(peer_manager.get_peers_clone());
     }
 
-    pub fn remove_peer(&mut self, uuid: &str) -> bool {
-        if let Some(pos) = self.peers.iter().position(|p| p.uuid == uuid) {
-            self.peers.remove(pos);
+    pub fn remove_peer(&self, uuid: &str) -> bool {
+        let mut peer_manager = self.peer_manager.lock().unwrap();
+        let result = peer_manager.remove_peer(uuid);
+
+        if result {
+            // Update controller with updated peers
             let mut controller = self.controller.lock().unwrap();
-            controller.set_peers(self.peers.clone());
-            true
-        } else {
-            false
+            controller.set_peers(peer_manager.get_peers_clone());
         }
+
+        result
     }
 
     pub fn get_stats(&self) -> NetworkStats {
-        NetworkStats {
-            local_peer_endpoints: self.local_peer.endpoints.len(),
-            total_peers: self.peers.len(),
-            active_connections: 0, // TODO: Implement connection tracking
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NetworkStats {
-    pub local_peer_endpoints: usize,
-    pub total_peers: usize,
-    pub active_connections: usize,
-}
-pub struct LoggingObserver;
-
-impl SocketObserver for LoggingObserver {
-    fn on_message_received(&self, message: ChatMessage) {
-        println!(
-            "🔔 Observer: Message received from {}: {}",
-            message.sender.name, message.text
-        );
+        self.network_monitor.get_stats()
     }
 
-    fn on_ack_received(
-        &self,
-        message_uuid: &str,
-        is_read: bool,
-        ack_time: chrono::DateTime<chrono::Utc>,
-    ) {
-        println!(
-            "🔔 Observer: ACK received for {} (read: {}) at {}",
-            message_uuid,
-            is_read,
-            ack_time.format("%H:%M:%S")
-        );
+    pub fn is_healthy(&self) -> bool {
+        self.network_monitor.is_healthy()
     }
 }
