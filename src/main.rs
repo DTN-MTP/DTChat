@@ -1,7 +1,11 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
 mod app;
-mod layout;
+mod config;
+mod domain;
+mod network;
+mod ui;
 mod utils;
 
 use app::{ChatApp, ChatModel, EventHandler};
@@ -9,17 +13,14 @@ use app::{ChatApp, ChatModel, EventHandler};
 #[cfg(feature = "dev")]
 use chrono::{Duration, Utc};
 
-use utils::{
-    config::AppConfigManager,
-    prediction_config::PredictionConfig,
-    socket::{DefaultSocketController, SocketController},
-};
+use config::{initialize_ack_config, initialize_app_config, PredictionConfig};
+
+use network::NetworkEngine;
 
 #[cfg(feature = "dev")]
-use utils::{
-    message::{ChatMessage, MessageStatus},
-    proto::generate_uuid,
-};
+use domain::{ChatMessage, MessageStatus};
+#[cfg(feature = "dev")]
+use utils::generate_uuid;
 
 #[derive(Clone)]
 pub struct ArcChatApp {
@@ -27,17 +28,11 @@ pub struct ArcChatApp {
 }
 
 fn main() -> Result<(), eframe::Error> {
-    let config_path = match std::env::var("DTCHAT_CONFIG") {
-        Ok(path) => path,
-        Err(_) => {
-            let default_path = "db/default.yaml".to_string();
-            println!(
-                "No DTCHAT_CONFIG environment variable found. Using default configuration: {default_path}"
-            );
-            default_path
-        }
-    };
-    let config: AppConfigManager = AppConfigManager::load_yaml_from_file(&config_path);
+    // Initialize ACK configuration at startup
+    println!("🚀 Initialisation de DTChat");
+    initialize_ack_config();
+
+    let config = initialize_app_config();
 
     let shared_peers = config.peer_list;
     let shared_rooms = config.room_list;
@@ -45,7 +40,9 @@ fn main() -> Result<(), eframe::Error> {
     let contact_plan = config.a_sabr;
 
     if !Path::new(&contact_plan).exists() {
-        eprintln!("Contact plan missing !!!");
+        eprintln!("❌ Contact plan missing at: {contact_plan}");
+    } else {
+        println!("📄 Contact plan found at: {contact_plan}");
     }
 
     #[cfg(feature = "dev")]
@@ -138,12 +135,19 @@ fn main() -> Result<(), eframe::Error> {
 
     let model_arc = Arc::new(Mutex::new(model));
 
-    match DefaultSocketController::init_controller(local_peer.clone(), shared_peers.clone()) {
-        Ok(controller) => {
-            controller.lock().unwrap().add_observer(model_arc.clone());
+    match NetworkEngine::new(local_peer.clone(), shared_peers.clone()) {
+        Ok(engine) => {
+            let engine_arc = Arc::new(Mutex::new(engine));
+            engine_arc.lock().unwrap().add_observer(model_arc.clone());
+
+            // Store the engine for the app to use
+            model_arc
+                .lock()
+                .unwrap()
+                .set_network_engine(engine_arc.clone());
         }
         Err(e) => {
-            eprintln!("Failed to initialize socket controller: {e:?}");
+            eprintln!("Failed to initialize network engine: {e:?}");
         }
     }
 

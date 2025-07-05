@@ -1,10 +1,9 @@
-use crate::layout::menu_bar::NavigationItems;
-use crate::layout::rooms::message_settings_bar::RoomView;
-use crate::layout::ui::display;
-use crate::utils::config::{Peer, Room};
-use crate::utils::message::{ChatMessage, MessageStatus};
-use crate::utils::prediction_config::PredictionConfig;
-use crate::utils::socket::SocketObserver;
+use crate::config::PredictionConfig;
+use crate::domain::{ChatMessage, MessageStatus, Peer, Room};
+use crate::network::{NetworkEngine, SocketObserver};
+use crate::ui::app::display;
+use crate::ui::components::message_settings::RoomView;
+use crate::ui::menu::NavigationItems;
 use chrono::{DateTime, Utc};
 use eframe::egui;
 use std::cmp::Ordering;
@@ -66,6 +65,7 @@ pub struct ChatModel {
     pub messages: Vec<ChatMessage>,
     observers: Vec<Arc<Mutex<dyn ModelObserver>>>,
     pub prediction_config: Option<PredictionConfig>,
+    network_engine: Option<Arc<Mutex<NetworkEngine>>>,
 }
 
 pub enum MessageDirection {
@@ -88,6 +88,7 @@ impl ChatModel {
             messages: Vec::new(),
             observers: Vec::new(),
             prediction_config,
+            network_engine: None,
         }
     }
 
@@ -123,6 +124,14 @@ impl ChatModel {
         self.notify_observers(event);
     }
 
+    pub fn set_network_engine(&mut self, engine: Arc<Mutex<NetworkEngine>>) {
+        self.network_engine = Some(engine);
+    }
+
+    pub fn get_network_engine(&self) -> Option<Arc<Mutex<NetworkEngine>>> {
+        self.network_engine.clone()
+    }
+
     pub fn sort_messages(&mut self, strat: SortStrategy) {
         self.sort_strategy = strat;
 
@@ -152,7 +161,7 @@ impl ChatModel {
 }
 
 impl SocketObserver for Mutex<ChatModel> {
-    fn on_socket_event(&self, message: ChatMessage) {
+    fn on_message_received(&self, message: ChatMessage) {
         let mut model = self.lock().unwrap();
         model.add_message(message, MessageDirection::Received);
     }
@@ -164,12 +173,14 @@ impl SocketObserver for Mutex<ChatModel> {
         ack_time: chrono::DateTime<chrono::Utc>,
     ) {
         let mut model = self.lock().unwrap();
+        println!("🎯 Model processing ACK for message {message_uuid} (read: {is_read})");
+
         if model.update_message_with_ack(message_uuid, is_read, ack_time) {
-            println!("Updated message {message_uuid} with ACK (read: {is_read})");
+            println!("✅ Model updated message {message_uuid} with ACK - triggering UI refresh");
             // Trigger UI update
             model.notify_observers(AppEvent::Sent("Message status updated".to_string()));
         } else {
-            println!("ACK received for unknown message: {message_uuid}");
+            println!("⚠️  Model: ACK received for unknown message: {message_uuid}");
         }
     }
 }

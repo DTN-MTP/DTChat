@@ -17,29 +17,54 @@ DTChat is a modern, GUI-based chat application designed for Delay Tolerant Netwo
 ## Architecture
 
 ```
-DTChat/
-├── src/
-│   ├── app.rs                      # Main application logic
-│   ├── main.rs                     # Entry point
-│   ├── layout/                     # UI components
-│   │   ├── rooms/                  # Chat interface modules
-│   │   │   ├── message_list.rs     # Message display
-│   │   │   ├── message_prompt.rs   # Input handling
-│   │   │   ├── message_forge.rs    # Peer selection
-│   │   │   └── message_graph.rs    # Timeline visualization
-│   │   └── menu_bar.rs             # Navigation menu
-│   ├── utils/                      # Core utilities
-│   │   ├── prediction_config.rs    # Prediction implementation using A-SABR routing
-│   │   ├── proto.rs                # Message serialization
-│   │   ├── socket.rs               # Network communication
-│   │   ├── message.rs              # Message data structures
-│   │   ├── config.rs               # Configuration management
-│   │   └── ack.rs                  # Acknowledgment handling
-│   └── proto/                      # Protocol buffer definitions
-│       └── message.proto           # Message format specification
-├── A-SABR/                         # Routing algorithm submodule
-├── database.yaml                   # Peer and network configuration
-└── Cargo.toml                      # Dependencies and features
+src/
+├── main.rs                 # Point d'entrée
+├── app.rs                  # Logique application principale
+├── config/                 # Configuration
+│   ├── mod.rs
+│   ├── app_config.rs      # AppConfigManager 
+│   ├── ack_config.rs      # Configuration ACK
+│   └── prediction.rs      # PredictionConfig
+├── domain/                 # Types métier core
+│   ├── mod.rs
+│   ├── message.rs         # ChatMessage, MessageStatus
+│   ├── peer.rs            # Peer 
+│   └── room.rs            # Room 
+├── network/                # Couche réseau 
+│   ├── mod.rs
+│   ├── engine.rs          # NetworkEngine
+│   ├── endpoint.rs        # Endpoints
+│   ├── encoding.rs        # Sérialisation
+│   ├── socket.rs          # Sockets
+│   └── protocols/         # Protocoles réseau
+│       ├── proto/
+│       │   ├── message.proto
+│       ├── mod.rs
+│       ├── protobuf.rs    # Proto logic
+│       └── ack.rs         # ACK logic 
+├── ui/                     # Interface utilisateur 
+│   ├── mod.rs
+│   ├── app.rs             # Interface principale
+│   ├── menu.rs            # Menu bar
+│   ├── components/        # Composants UI
+│   │   ├── mod.rs
+│   │   ├── message_input.rs   # MessagePrompt
+│   │   ├── message_forge.rs   # MessageForge  
+│   │   └── message_settings.rs # MessageSettingsBar
+│   └── views/             # Vues
+│       ├── mod.rs
+│       ├── message_list.rs    # Liste des messages
+│       ├── message_graph.rs   # Graphique timeline
+│       └── rooms/
+│           ├── mod.rs
+│           └── actions/
+│               ├── mod.rs
+│               └── create_room.rs
+└── utils/                  # Utilitaires génériques
+    ├── mod.rs
+    ├── colors.rs          # Couleurs (conservé)
+    ├── uuid.rs            # UUID utils (extrait de proto.rs)
+    └── time.rs            # Utilitaires temps (nouveau)
 ```
 
 ## Quick Start
@@ -48,26 +73,54 @@ DTChat/
 
 - **Rust 1.70+**: [Install Rust](https://rustup.rs/)
 - **ION-DTN or bp-socket**: Bundle Protocol daemon
-- **Git**: For submodule support
 - [Protobuf](https://protobuf.dev/installation/)
+- **Just**: [Install Just](https://just.systems/)
+### Running DTChat Local Instances
 
-### Installation
+You can launch two local DTChat instances for testing, either manually or using the `just` command.
 
+#### 1. Manual Method
+
+Open **two terminal windows** and run:
+
+**For TCP:**
 ```bash
-# Clone the repository with submodules
-git clone --recursive https://github.com/DTN-MTP/DTChat.git
-cd DTChat
+DTCHAT_CONFIG=db/local/tcp-1.yaml cargo run   # Terminal 1
+DTCHAT_CONFIG=db/local/tcp-2.yaml cargo run   # Terminal 2
+```
 
-# in the node VM Build the project
-cargo build --release
+**For UDP:**
+```bash
+DTCHAT_CONFIG=db/local/udp-1.yaml cargo run   # Terminal 1
+DTCHAT_CONFIG=db/local/udp-2.yaml cargo run   # Terminal 2
+```
 
-# Run DTChat with default configuration
-DTCHAT_CONFIG=./db/default.yaml  cargo run 
+To enable artificial ACK delay (for testing), set the `DTCHAT_ACK_DELAY` environment variable and use the `ack-delay` feature:
+```bash
+DTCHAT_CONFIG=db/local/tcp-1.yaml DTCHAT_ACK_DELAY=2 cargo run --features ack-delay
+```
+
+#### 2. Using Just (Recommended)
+
+If you have [`just`](https://just.systems/) installed, simply run in two terminals:
+
+**For TCP or UDP:**
+
+```md
+just dtchat run <socket> <instance> <delay>
+    → Démarre DTChat avec paramètres spécifiques
+    → socket   : tcp|udp - Type de connexion
+    → instance : 1|2 - Numéro d'instance
+    → delay    : Délai en ms pour ack-delay (vide = désactivé)
 ```
 
 ### Configuration (DTCHAT_CONFIG)
 
 Three different configuration files are available in the `db` directory:
+- `local/tcp-1.yaml`: Configuration for the first local instance (TCP)
+- `local/tcp-2.yaml`: Configuration for the second local instance (TCP)
+- `local/udp-1.yaml`: Configuration for the first local instance (UDP)
+- `local/udp-2.yaml`: Configuration for the second local instance (UDP)
 - `default.yaml`: Default configuration for local testing
 - `ion.yaml`: Example configuration for ion integration (dtchat-bp-socket-testing)
 - `ud3dtn.yaml`: Example configuration for ud3dtn integration(dtchat-bp-socket-testing)
@@ -90,7 +143,7 @@ a outduct tcp 192.168.50.30:4556 tcpclo
 
 ### Basic Chat
 
-1. **Start DTChat**: `DTCHAT_CONFIG=./db/default.yaml cargo run`
+1. **Start DTChat**: `DTCHAT_CONFIG=db/**/<DB>.yaml cargo run`
 2. **Select a peer** from the dropdown menu
 3. **Click on the PBAT checkbox (optional)** to view delivery time prediction
 4. **Type your message** in the input field
@@ -112,23 +165,6 @@ a outduct tcp 192.168.50.30:4556 tcpclo
 - **List View**: Chronological message display
 - **Graph View**: Timeline with delivery predictions
 - **Table View**: Structured data with timestamps
-
-## Development
-
-### Building Features
-
-```bash
-# Development build with debug features
-cargo run --features dev
-
-
-### Project Structure
-
-- **UI Components**: `src/layout/` - egui-based interface modules
-- **Network Layer**: `src/utils/socket.rs` - Bundle Protocol communication
-- **PBAT Using Routing Algorithms**: `src/utils/prediction_config.rs` - A-SABR integration
-- **Message Handling**: `src/utils/message.rs` - Data structures and serialization
-- **Configuration**: `src/utils/config.rs` - YAML-based configuration
 
 
 ## Advanced Features
@@ -157,21 +193,86 @@ Supports multiple transport mechanisms:
 - **ION Integration**: Direct integration with NASA's ION-DTN
 - **bp-socket**: Kernel-level Bundle Protocol support
 
-## Troubleshooting
 
-### Common Issues
+## Development & Contributing
 
-**"No route found"**
+If you would like to contribute or have questions about the project, please contact:
+
+- Charley GEOFFROY: [charley.geoffroy@protonmail.com]
+- Olivier DE JONCKERE: [olivier.de-jonckere@lirmm.fr]
+
+We welcome your feedback and contributions!
+
+### Prerequisites
+
+- **Rust Toolchain**: Ensure you have Rust 1.70+ installed
+- **Just CLI**: Install [Just](https://just.systems/man/en)
+- **Protobuf Compiler**: Install [protoc](https://protobuf.dev/installation/)
+
+### Setting Up pre-commit Hook
+
+Before starting development, it's crucial to set up the `pre-commit` hook. This ensures that code quality checks are run locally before pushing changes, preventing issues from reaching the main branch.
+
+> [!WARNING]  
+> Setting up the pre-commit hook is vital for maintaining code quality and consistency. It ensures that all CI checks are performed locally before you push your changes.
+
+
+1. Enable the `pre-commit` hook with `just`:
+
+Before starting development, set up the pre-commit hook to ensure code quality:
+
 ```bash
-# Check contact plan configuration
-cat <contact_plan file>
-
-# Verify ION daemon status  
-ionadmin
-
-# Check database.yaml configuration
-cat database.yaml
+just hook-setup
 ```
+
+Output should be:
+
+```bash 
+🔧 Installation du hook pre-commit...
+✅ Hook pre-commit installé! Il sera exécuté avant chaque commit.
+🎯 Configuration terminée pour le développement
+Commandes utiles:
+  just fmt         - Formate le code
+  just clippy      - Analyse le code
+  just pre-commit  - Vérifie tout avant commit
+```
+
+> [!TIP]
+> You can find all available commands by running `just help`.
+
+### Continuous Integration (CI)
+
+The CI workflow for DTChat ensures code quality for every pull request targeting the `main` branch. This automated process verifies that proposed changes meet project standards and function correctly across different platforms.
+
+#### Main Checks
+
+- **Code Formatting**: Verifies code adheres to Rust style conventions using `cargo fmt`
+- **Static Analysis**: Detects potential issues and anti-patterns with `cargo clippy`
+- **Cross-platform Compatibility**: Tests code on Linux (Ubuntu) and macOS
+- **Rust Compatibility**: Ensures compatibility with both stable and nightly Rust versions
+- **Dependencies**: Tests compilation with the latest dependency versions
+
+#### Impact on Workflow
+
+> [!IMPORTANT]  
+> **Pull Request Requirements**
+>
+> A pull request cannot be merged if any CI check fails. This rule ensures that:
+> - Code in the main branch always remains in a functional state
+> - Quality standards are consistently enforced
+> - Issues are detected and fixed before code integration
+
+
+#### In Case of CI Failure
+
+If your pull request fails CI checks:
+1. Review the error logs in the GitHub interface
+2. Fix the reported issues locally
+3. For formatting errors: run `cargo fmt --all`
+4. For Clippy warnings: run `cargo clippy --fix --allow-dirty`
+5. Push your fixes to trigger a new CI run
+
+For more details on the CI configuration, refer to the `.github/workflows/ci.yaml` file.
 
 ## License
 
